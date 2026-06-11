@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Swissalpine ETA</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:           #0D1117;
+      --surface:      #161B22;
+      --border:       #30363D;
+      --accent:       #E8A838;
+      --accent-dim:   #7D5A1A;
+      --text:         #F0F6FC;
+      --muted:        #8B949E;
+      --ok:           #3FB950;
+      --mono:         'DM Mono', 'Courier New', monospace;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 14px;
+      min-height: 100vh;
+      padding: 0 0 120px 0;
+    }
+
+    /* ── header ── */
+    header {
+      padding: 20px 16px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 {
+      font-size: 11px;
+      font-weight: 400;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    header p {
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--text);
+      margin-top: 4px;
+    }
+
+    /* ── route strip ── */
+    .route-strip {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      overflow-x: auto;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      scrollbar-width: none;
+    }
+    .route-strip::-webkit-scrollbar { display: none; }
+    .route-node {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .route-node .label {
+      font-size: 9px;
+      color: var(--muted);
+      text-align: center;
+      max-width: 60px;
+      white-space: nowrap;
+    }
+    .route-node .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--border);
+      margin: 4px 0 3px;
+      transition: background 0.2s;
+    }
+    .route-node .dot.active { background: var(--accent); }
+    .route-node .dot.target { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+    .route-node .lkm {
+      font-size: 9px;
+      color: var(--accent-dim);
+    }
+    .route-line {
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+      min-width: 12px;
+      margin-bottom: 10px;
+    }
+
+    /* ── checkpoints ── */
+    .section-label {
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 16px 16px 8px;
+    }
+
+    .checkpoint {
+      padding: 10px 16px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .checkpoint-meta { display: flex; flex-direction: column; gap: 2px; }
+    .checkpoint-name { font-size: 14px; font-weight: 500; color: var(--text); }
+    .checkpoint-detail { font-size: 11px; color: var(--muted); }
+    .checkpoint-pace {
+      font-size: 11px;
+      color: var(--accent);
+      margin-top: 3px;
+      min-height: 14px;
+    }
+
+    .time-input {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 18px;
+      padding: 8px 10px;
+      width: 90px;
+      text-align: center;
+      transition: border-color 0.15s;
+      -webkit-appearance: none;
+    }
+    .time-input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .time-input.filled { border-color: var(--accent-dim); }
+    .time-input:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    /* ── result card ── */
+    .result-card {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 14px 16px 24px;
+    }
+    .result-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .result-item { display: flex; flex-direction: column; gap: 2px; }
+    .result-label {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .result-time {
+      font-size: 36px;
+      font-weight: 500;
+      color: var(--text);
+      letter-spacing: 0.04em;
+      transition: color 0.3s;
+    }
+    .result-time.ready { color: var(--ok); }
+    .result-time.placeholder { color: var(--border); }
+    .result-sub {
+      font-size: 11px;
+      color: var(--muted);
+      min-height: 15px;
+    }
+    .result-basis {
+      font-size: 10px;
+      color: var(--accent-dim);
+      margin-top: 6px;
+      min-height: 14px;
+    }
+
+    /* ── settings ── */
+    .settings {
+      padding: 16px 16px 4px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .settings label { font-size: 11px; color: var(--muted); }
+    .settings input[type=time] {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      padding: 4px 8px;
+    }
+    .settings input[type=time]:focus { outline: none; border-color: var(--accent); }
+
+    .reset-btn {
+      margin-left: auto;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 4px 10px;
+      cursor: pointer;
+    }
+    .reset-btn:hover { border-color: var(--muted); color: var(--text); }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Swissalpine K78 · 18. Juli 2025</h1>
+  <p>ETA Segneshütte</p>
+</header>
+
+<div class="route-strip" id="routeStrip">
+  <!-- filled by JS -->
+</div>
+
+<div class="settings">
+  <label>Start</label>
+  <input type="time" id="startTime" value="05:00">
+  <button class="reset-btn" onclick="resetAll()">Reset</button>
+</div>
+
+<div class="section-label">Ankunftszeiten</div>
+
+<div id="checkpointList">
+  <!-- filled by JS -->
+</div>
+
+<div class="result-card">
+  <div class="result-grid">
+    <div class="result-item">
+      <div class="result-label">ETA Segneshütte</div>
+      <div class="result-time placeholder" id="etaSegnes">--:--</div>
+      <div class="result-sub" id="etaSegnesSub"></div>
+    </div>
+    <div class="result-item">
+      <div class="result-label">ETA Ziel</div>
+      <div class="result-time placeholder" id="etaZiel">--:--</div>
+      <div class="result-sub" id="etaZielSub"></div>
+    </div>
+  </div>
+  <div class="result-basis" id="resultBasis"></div>
+</div>
+
+<script>
+  // ── Strecke ──────────────────────────────────────────────────────────────
+  const ROUTE = [
+    { id: 'start',    name: 'Start',         lkm: 0,       input: false },
+    { id: 'trindigg', name: 'Trin Digg',     lkm: 25.68,   input: true  },
+    { id: 'tegiasut', name: 'Tegia sut',     lkm: 46.685,  input: true  },
+    { id: 'bargis',   name: 'Bargis',        lkm: 62.51,   input: true  },
+    { id: 'gronda',   name: 'Tegia Gronda',  lkm: 69.88,   input: true  },
+    { id: 'segnes',   name: 'Segneshütte',   lkm: 87.255,  input: false },
+    { id: 'ziel',     name: 'Ziel',          lkm: 124.255, input: false },
+  ];
+
+  // Fatigue model params (calibrated)
+  const V_BASE_MODEL = 10.2;   // lkm/h
+  const ONSET = 40.0;          // lkm
+  const LAMBDA = 0.009;
+  const FLOOR = 0.55;
+
+  function fatigue(lkm) {
+    return Math.max(FLOOR, Math.exp(-LAMBDA * Math.max(0, lkm - ONSET)));
+  }
+
+  function fatigueMid(lkm_a, lkm_b) {
+    // average of start and end fatigue (as in ODS)
+    return (fatigue(lkm_a) + fatigue(lkm_b)) / 2;
+  }
+
+  // ── Time helpers ─────────────────────────────────────────────────────────
+  function toMin(hhmm) {
+    if (!hhmm) return null;
+    const [h, m] = hhmm.split(':').map(Number);
+    return h * 60 + m;
+  }
+
+  function toHHMM(minutes) {
+    if (minutes == null || isNaN(minutes)) return '--:--';
+    const h = Math.floor(minutes / 60) % 24;
+    const m = Math.round(minutes % 60);
+    return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+  }
+
+  function durationStr(minutes) {
+    if (!minutes || minutes <= 0) return '';
+    const h = Math.floor(minutes / 60);
+    const m = Math.round(minutes % 60);
+    return h > 0 ? `${h}h ${m}min` : `${m}min`;
+  }
+
+  // ── Build DOM ─────────────────────────────────────────────────────────────
+  function buildRoute() {
+    const strip = document.getElementById('routeStrip');
+    ROUTE.forEach((cp, i) => {
+      const node = document.createElement('div');
+      node.className = 'route-node';
+      const isTarget = cp.id === 'segnes';
+      node.innerHTML = `
+        <span class="label">${cp.name}</span>
+        <div class="dot${isTarget ? ' target' : ''}" id="dot_${cp.id}"></div>
+        <span class="lkm">${cp.lkm > 0 ? cp.lkm.toFixed(0) + ' lkm' : 'Start'}</span>
+      `;
+      strip.appendChild(node);
+      if (i < ROUTE.length - 1) {
+        const line = document.createElement('div');
+        line.className = 'route-line';
+        strip.appendChild(line);
+      }
+    });
+  }
+
+  function buildCheckpoints() {
+    const list = document.getElementById('checkpointList');
+    const inputs = ROUTE.filter(cp => cp.input);
+    inputs.forEach((cp, i) => {
+      const prev = ROUTE[ROUTE.findIndex(r => r.id === cp.id) - 1];
+      const segLkm = cp.lkm - prev.lkm;
+      const div = document.createElement('div');
+      div.className = 'checkpoint';
+      div.innerHTML = `
+        <div class="checkpoint-meta">
+          <div class="checkpoint-name">${cp.name}</div>
+          <div class="checkpoint-detail">${cp.lkm} lkm · +${segLkm.toFixed(1)} lkm ab ${prev.name}</div>
+          <div class="checkpoint-pace" id="pace_${cp.id}"></div>
+        </div>
+        <input type="time" class="time-input" id="input_${cp.id}"
+               placeholder="--:--" step="60"
+               oninput="onTimeInput('${cp.id}')">
+      `;
+      list.appendChild(div);
+    });
+  }
+
+  // ── Core calculation ──────────────────────────────────────────────────────
+  function calculate() {
+    const startMin = toMin(document.getElementById('startTime').value) ?? 300;
+
+    // Collect filled checkpoints
+    const filled = [];
+    ROUTE.forEach(cp => {
+      if (!cp.input) return;
+      const el = document.getElementById('input_' + cp.id);
+      const val = el?.value;
+      if (val) filled.push({ ...cp, arrMin: toMin(val) });
+    });
+
+    // Update dot states
+    ROUTE.forEach(cp => {
+      const dot = document.getElementById('dot_' + cp.id);
+      if (!dot) return;
+      const isFilled = filled.find(f => f.id === cp.id);
+      if (cp.id === 'segnes') return; // always green
+      if (cp.id === 'start') { dot.classList.add('active'); return; }
+      if (isFilled) dot.classList.add('active');
+      else dot.classList.remove('active');
+    });
+
+    // Show pace per segment
+    ROUTE.filter(cp => cp.input).forEach((cp, i) => {
+      const paceEl = document.getElementById('pace_' + cp.id);
+      const f = filled.find(f => f.id === cp.id);
+      if (!f) { paceEl.textContent = ''; return; }
+
+      const prevFilled = i === 0
+        ? { lkm: 0, arrMin: startMin }
+        : (() => {
+            const inputCps = ROUTE.filter(r => r.input);
+            for (let j = i - 1; j >= 0; j--) {
+              const prev = inputCps[j];
+              const pf = filled.find(ff => ff.id === prev.id);
+              if (pf) return pf;
+            }
+            return { lkm: 0, arrMin: startMin };
+          })();
+
+      const segLkm = f.lkm - prevFilled.lkm;
+      const segMin = f.arrMin - prevFilled.arrMin;
+      if (segMin <= 0) { paceEl.textContent = '⚠ Zeit prüfen'; return; }
+      const pace = segLkm / (segMin / 60);
+      paceEl.textContent = `${pace.toFixed(1)} lkm/h`;
+    });
+
+    if (filled.length === 0) {
+      setResult(null, null, null);
+      return;
+    }
+
+    // Use last filled segment to estimate v_base
+    const last = filled[filled.length - 1];
+    const lastIdx = ROUTE.findIndex(r => r.id === last.id);
+    const prevCp = ROUTE[lastIdx - 1];
+
+    // Find previous filled or start
+    let prevFilled = { lkm: 0, arrMin: startMin };
+    for (let i = filled.length - 2; i >= 0; i--) {
+      if (filled[i].lkm < last.lkm) { prevFilled = filled[i]; break; }
+    }
+    // fallback: use start if only one point
+    if (filled.length === 1) prevFilled = { lkm: 0, arrMin: startMin };
+
+    const segLkm = last.lkm - prevFilled.lkm;
+    const segMin = last.arrMin - prevFilled.arrMin;
+    if (segMin <= 0) { setResult(null, null, 'Zeit prüfen'); return; }
+
+    const measuredPace = segLkm / (segMin / 60);  // lkm/h
+    const fSeg = fatigueMid(prevFilled.lkm, last.lkm);
+    const vBaseEst = measuredPace / fSeg;
+
+    // Clamp v_base to sane range [6, 14]
+    const vBase = Math.min(14, Math.max(6, vBaseEst));
+
+    // Project to Segneshütte
+    const segnes = ROUTE.find(r => r.id === 'segnes');
+    const ziel = ROUTE.find(r => r.id === 'ziel');
+
+    const fSegnes = fatigueMid(last.lkm, segnes.lkm);
+    const distToSegnes = segnes.lkm - last.lkm;
+    const minToSegnes = (distToSegnes / (vBase * fSegnes)) * 60;
+    const etaSegnesMin = last.arrMin + minToSegnes;
+
+    // Project to Ziel
+    const fZiel = fatigueMid(segnes.lkm, ziel.lkm);
+    const distToZiel = ziel.lkm - last.lkm;
+    const fFull = fatigueMid(last.lkm, ziel.lkm);
+    const minToZiel = (distToZiel / (vBase * fFull)) * 60;
+    const etaZielMin = last.arrMin + minToZiel;
+
+    const basisText = `Basis: ${vBase.toFixed(1)} lkm/h (ab ${last.name}, ${measuredPace.toFixed(1)} lkm/h gemessen)`;
+    setResult(etaSegnesMin, etaZielMin, basisText, startMin);
+  }
+
+  function setResult(segnesMin, zielMin, basis, startMin) {
+    const segnesEl = document.getElementById('etaSegnes');
+    const zielEl = document.getElementById('etaZiel');
+    const segnesSubEl = document.getElementById('etaSegnesSub');
+    const zielSubEl = document.getElementById('etaZielSub');
+    const basisEl = document.getElementById('resultBasis');
+
+    if (segnesMin == null) {
+      segnesEl.textContent = '--:--';
+      segnesEl.className = 'result-time placeholder';
+      zielEl.textContent = '--:--';
+      zielEl.className = 'result-time placeholder';
+      segnesSubEl.textContent = '';
+      zielSubEl.textContent = '';
+      basisEl.textContent = '';
+      return;
+    }
+
+    segnesEl.textContent = toHHMM(segnesMin);
+    segnesEl.className = 'result-time ready';
+    zielEl.textContent = toHHMM(zielMin);
+    zielEl.className = 'result-time ready';
+
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const diffSegnes = segnesMin - nowMin;
+    segnesSubEl.textContent = diffSegnes > 0 ? `in ${durationStr(diffSegnes)}` : '';
+
+    const totalMin = zielMin - (startMin ?? 300);
+    zielSubEl.textContent = `Gesamtzeit ${durationStr(totalMin)}`;
+
+    basisEl.textContent = basis ?? '';
+  }
+
+  function onTimeInput(id) {
+    const el = document.getElementById('input_' + id);
+    if (el.value) el.classList.add('filled');
+    else el.classList.remove('filled');
+    calculate();
+  }
+
+  function resetAll() {
+    ROUTE.filter(cp => cp.input).forEach(cp => {
+      const el = document.getElementById('input_' + cp.id);
+      if (el) { el.value = ''; el.classList.remove('filled'); }
+      const pace = document.getElementById('pace_' + cp.id);
+      if (pace) pace.textContent = '';
+    });
+    setResult(null, null, null);
+    ROUTE.forEach(cp => {
+      const dot = document.getElementById('dot_' + cp.id);
+      if (dot && cp.id !== 'segnes' && cp.id !== 'start') dot.classList.remove('active');
+    });
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  buildRoute();
+  buildCheckpoints();
+  document.getElementById('startTime').addEventListener('change', calculate);
+</script>
+</body>
+</html>
