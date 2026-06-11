@@ -263,21 +263,21 @@
 <script>
   // ── Strecke ──────────────────────────────────────────────────────────────
   const ROUTE = [
-    { id: 'start',    name: 'Start',         lkm: 0,       input: false },
-    { id: 'trindigg', name: 'Trin Digg',     lkm: 25.68,   input: true  },
-    { id: 'tegiasut', name: 'Tegia sut',     lkm: 46.685,  input: true  },
-    { id: 'bargis',   name: 'Bargis',        lkm: 62.51,   input: true  },
-    { id: 'gronda',   name: 'Tegia Gronda',  lkm: 69.88,   input: true  },
-    { id: 'segnes',   name: 'Segneshütte',   lkm: 87.255,  input: false },
-    { id: 'ziel',     name: 'Ziel',          lkm: 124.255, input: false },
-  ];
+	  { id: 'start',    name: 'Start',        lkm: 0,       modelMin: 300,  input: false },
+	  { id: 'trindigg', name: 'Trin Digg',    lkm: 25.68,   modelMin: 446,  input: true  },
+	  { id: 'tegiasut', name: 'Tegia sut',    lkm: 46.685,  modelMin: 573,  input: true  },
+	  { id: 'bargis',   name: 'Bargis',       lkm: 62.51,   modelMin: 683,  input: true  },
+	  { id: 'gronda',   name: 'Tegia Gronda', lkm: 69.88,   modelMin: 737,  input: true  },
+	  { id: 'segnes',   name: 'Segneshütte',  lkm: 87.255,  modelMin: 883,  input: false },
+	  { id: 'ziel',     name: 'Ziel',         lkm: 124.255, modelMin: 1260, input: false },
+	];
 
   // Fatigue model params (calibrated)
   const V_BASE_MODEL = 10.2;   // lkm/h
   const ONSET = 40.0;          // lkm
   const LAMBDA = 0.009;
   const FLOOR = 0.55;
-
+  
   function fatigue(lkm) {
     return Math.max(FLOOR, Math.exp(-LAMBDA * Math.max(0, lkm - ONSET)));
   }
@@ -343,9 +343,15 @@
           <div class="checkpoint-detail">${cp.lkm} lkm · +${segLkm.toFixed(1)} lkm ab ${prev.name}</div>
           <div class="checkpoint-pace" id="pace_${cp.id}"></div>
         </div>
-        <input type="time" class="time-input" id="input_${cp.id}"
-               placeholder="--:--" step="60"
-               oninput="onTimeInput('${cp.id}')">
+		<div style="display:flex; align-items:center; gap:6px;">
+			<input type="text" class="time-input" id="input_${cp.id}"
+				placeholder="${toHHMM(cp.modelMin)}" maxlength="5" inputmode="numeric"
+				oninput="onTimeInput('${cp.id}')">
+			 <button onclick="clearInput('${cp.id}')" style="
+				background:none; border:none; color:var(--muted);
+				font-size:16px; cursor:pointer; padding:4px; line-height:1;
+				">✕</button>
+		</div>
       `;
       list.appendChild(div);
     });
@@ -355,98 +361,80 @@
   function calculate() {
     const startMin = toMin(document.getElementById('startTime').value) ?? 300;
 
-    // Collect filled checkpoints
-    const filled = [];
+    // Collect measured checkpoints
+    const measured = [];
     ROUTE.forEach(cp => {
       if (!cp.input) return;
       const el = document.getElementById('input_' + cp.id);
       const val = el?.value;
-      if (val) filled.push({ ...cp, arrMin: toMin(val) });
+      if (val && /^\d{2}:\d{2}$/.test(val)) {
+        measured.push({ ...cp, arrMin: toMin(val) });
+      }
     });
 
     // Update dot states
     ROUTE.forEach(cp => {
       const dot = document.getElementById('dot_' + cp.id);
       if (!dot) return;
-      const isFilled = filled.find(f => f.id === cp.id);
-      if (cp.id === 'segnes') return; // always green
+      if (cp.id === 'segnes') return;
       if (cp.id === 'start') { dot.classList.add('active'); return; }
-      if (isFilled) dot.classList.add('active');
+      if (measured.find(f => f.id === cp.id)) dot.classList.add('active');
       else dot.classList.remove('active');
     });
 
-    // Show pace per segment
+    // Build effective timeline: measured where available, shifted model otherwise
+    const delta = measured.length > 0
+      ? measured[measured.length - 1].arrMin - measured[measured.length - 1].modelMin
+      : 0;
+
+    const effective = ROUTE.map(cp => ({
+      ...cp,
+      arrMin: measured.find(m => m.id === cp.id)?.arrMin ?? (cp.modelMin + delta)
+    }));
+
+    // Show pace per segment (measured only)
     ROUTE.filter(cp => cp.input).forEach((cp, i) => {
       const paceEl = document.getElementById('pace_' + cp.id);
-      const f = filled.find(f => f.id === cp.id);
-      if (!f) { paceEl.textContent = ''; return; }
-
-      const prevFilled = i === 0
-        ? { lkm: 0, arrMin: startMin }
-        : (() => {
-            const inputCps = ROUTE.filter(r => r.input);
-            for (let j = i - 1; j >= 0; j--) {
-              const prev = inputCps[j];
-              const pf = filled.find(ff => ff.id === prev.id);
-              if (pf) return pf;
-            }
-            return { lkm: 0, arrMin: startMin };
-          })();
-
-      const segLkm = f.lkm - prevFilled.lkm;
-      const segMin = f.arrMin - prevFilled.arrMin;
+      const m = measured.find(f => f.id === cp.id);
+      if (!m) { paceEl.textContent = ''; return; }
+      const idx = effective.findIndex(e => e.id === cp.id);
+      const prev = effective[idx - 1];
+      const segLkm = m.lkm - prev.lkm;
+      const segMin = m.arrMin - prev.arrMin;
       if (segMin <= 0) { paceEl.textContent = '⚠ Zeit prüfen'; return; }
-      const pace = segLkm / (segMin / 60);
-      paceEl.textContent = `${pace.toFixed(1)} lkm/h`;
+      paceEl.textContent = `${(segLkm / (segMin / 60)).toFixed(1)} lkm/h`;
     });
 
-    if (filled.length === 0) {
-      setResult(null, null, null);
-      return;
+    // Fit v_base over all effective input segments (lkm-weighted)
+    const fitPoints = [effective[0], ...effective.filter(cp => cp.input)];
+    let totalLkm = 0, totalWeighted = 0, valid = true;
+    for (let i = 1; i < fitPoints.length; i++) {
+      const a = fitPoints[i-1], b = fitPoints[i];
+      const segLkm = b.lkm - a.lkm;
+      const segMin = b.arrMin - a.arrMin;
+      if (segMin <= 0) { valid = false; break; }
+      const f = fatigueMid(a.lkm, b.lkm);
+      const vb = (segLkm / (segMin / 60)) / f;
+      totalWeighted += vb * segLkm;
+      totalLkm += segLkm;
     }
+    if (!valid || totalLkm === 0) { setResult(null, null, 'Zeit prüfen'); return; }
 
-    // Use last filled segment to estimate v_base
-    const last = filled[filled.length - 1];
-    const lastIdx = ROUTE.findIndex(r => r.id === last.id);
-    const prevCp = ROUTE[lastIdx - 1];
+    const vBase = Math.min(14, Math.max(6, totalWeighted / totalLkm));
+    const last = effective.find(e => e.id === (measured.length > 0
+      ? measured[measured.length - 1].id
+      : ROUTE.filter(r => r.input).slice(-1)[0].id));
 
-    // Find previous filled or start
-    let prevFilled = { lkm: 0, arrMin: startMin };
-    for (let i = filled.length - 2; i >= 0; i--) {
-      if (filled[i].lkm < last.lkm) { prevFilled = filled[i]; break; }
-    }
-    // fallback: use start if only one point
-    if (filled.length === 1) prevFilled = { lkm: 0, arrMin: startMin };
+    const segnes = effective.find(e => e.id === 'segnes');
+    const ziel   = effective.find(e => e.id === 'ziel');
 
-    const segLkm = last.lkm - prevFilled.lkm;
-    const segMin = last.arrMin - prevFilled.arrMin;
-    if (segMin <= 0) { setResult(null, null, 'Zeit prüfen'); return; }
+    const etaSegnesMin = last.arrMin + (segnes.lkm - last.lkm) / (vBase * fatigueMid(last.lkm, segnes.lkm)) * 60;
+    const etaZielMin   = last.arrMin + (ziel.lkm   - last.lkm) / (vBase * fatigueMid(last.lkm, ziel.lkm))   * 60;
 
-    const measuredPace = segLkm / (segMin / 60);  // lkm/h
-    const fSeg = fatigueMid(prevFilled.lkm, last.lkm);
-    const vBaseEst = measuredPace / fSeg;
-
-    // Clamp v_base to sane range [6, 14]
-    const vBase = Math.min(14, Math.max(6, vBaseEst));
-
-    // Project to Segneshütte
-    const segnes = ROUTE.find(r => r.id === 'segnes');
-    const ziel = ROUTE.find(r => r.id === 'ziel');
-
-    const fSegnes = fatigueMid(last.lkm, segnes.lkm);
-    const distToSegnes = segnes.lkm - last.lkm;
-    const minToSegnes = (distToSegnes / (vBase * fSegnes)) * 60;
-    const etaSegnesMin = last.arrMin + minToSegnes;
-
-    // Project to Ziel
-    const fZiel = fatigueMid(segnes.lkm, ziel.lkm);
-    const distToZiel = ziel.lkm - last.lkm;
-    const fFull = fatigueMid(last.lkm, ziel.lkm);
-    const minToZiel = (distToZiel / (vBase * fFull)) * 60;
-    const etaZielMin = last.arrMin + minToZiel;
-
-    const basisText = `Basis: ${vBase.toFixed(1)} lkm/h (ab ${last.name}, ${measuredPace.toFixed(1)} lkm/h gemessen)`;
-    setResult(etaSegnesMin, etaZielMin, basisText, startMin);
+    const src = measured.length > 0
+      ? `${measured.length} gemessen + ${4 - measured.length} verschoben (Δ${delta >= 0 ? '+' : ''}${Math.round(delta)}min)`
+      : 'Modell (keine Messung)';
+    setResult(etaSegnesMin, etaZielMin, `Basis: ${vBase.toFixed(1)} lkm/h · ${src}`, startMin);
   }
 
   function setResult(segnesMin, zielMin, basis, startMin) {
@@ -484,11 +472,15 @@
   }
 
   function onTimeInput(id) {
-    const el = document.getElementById('input_' + id);
-    if (el.value) el.classList.add('filled');
-    else el.classList.remove('filled');
-    calculate();
-  }
+	  const el = document.getElementById('input_' + id);
+	  let v = el.value.replace(/[^0-9]/g, '');
+	  if (v.length >= 3) v = v.slice(0, 2) + ':' + v.slice(2, 4);
+	  el.value = v;
+	  const valid = /^\d{2}:\d{2}$/.test(v);
+	  if (valid) el.classList.add('filled');
+	  else el.classList.remove('filled');
+	  if (valid) calculate();
+	}
 
   function resetAll() {
     ROUTE.filter(cp => cp.input).forEach(cp => {
@@ -503,6 +495,14 @@
       if (dot && cp.id !== 'segnes' && cp.id !== 'start') dot.classList.remove('active');
     });
   }
+  
+  function clearInput(id) {
+	  const el = document.getElementById('input_' + id);
+	  el.value = '';
+	  el.classList.remove('filled');
+	  document.getElementById('pace_' + id).textContent = '';
+	  calculate();
+	}
 
   // ── Init ──────────────────────────────────────────────────────────────────
   buildRoute();
