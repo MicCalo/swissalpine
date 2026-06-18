@@ -81,22 +81,20 @@
   <p>Marschtabelle</p>
 </header>
 
-<div class="params">
+<div class="params" id="fitParamsBarInitial">
   <div class="param" style="color:var(--muted);font-size:10px;letter-spacing:.1em;text-transform:uppercase;align-self:center">init. →</div>
-  <div class="param">v₀ <span id="pV0">10.2</span> lkm/h</div>
-  <div class="param">onset <span>40</span> lkm</div>
-  <div class="param">λ <span>0.009</span></div>
-  <div class="param">floor <span>0.55</span></div>
+  <div class="param">v₀ <span id="pV0">?</span> lkm/h</div>
+  <div class="param">onset <span id="pOnset">?</span> lkm</div>
+  <div class="param">λ <span id="pLambda">?</span></div>
+  <div class="param">floor <span  id="pFloor">?</span></div>
 </div>
 
-<div class="params" id="fitParamsBar" style="display:none">
+<div class="params" id="fitParamsBarAdjusted" style="display:none">
   <div class="param" style="color:var(--muted);font-size:10px;letter-spacing:.1em;text-transform:uppercase;align-self:center">fit →</div>
   <div class="param">v₀ <span id="fpV0" style="color:var(--ok)"></span> lkm/h</div>
   <div class="param">onset <span id="fpOnset" style="color:var(--ok)"></span> lkm</div>
   <div class="param">λ <span id="fpLambda" style="color:var(--ok)"></span></div>
 </div>
-
-<div class="fit-bar" id="fitBar">Lade ist.txt…</div>
 
 <div class="table-wrap">
   <table>
@@ -104,13 +102,13 @@
       <tr>
         <th>Posten</th>
         <th>lkm</th>
-        <th>↑</th>
-        <th>↓</th>
-        <th>+lkm</th>
-        <th>Dauer</th>
         <th>Soll</th>
         <th>Ist</th>
         <th>Δ</th>
+        <th>+lkm</th>
+        <th>Dauer</th>
+        <th>↑</th>
+        <th>↓</th>
       </tr>
     </thead>
     <tbody id="tbody"></tbody>
@@ -118,32 +116,38 @@
 </div>
 
 <script>
+
 // ── Model params ────────────────────────────────────────────────────────────
-const V_BASE   = 10.2;
-const ONSET    = 40.0;
-const LAMBDA   = 0.009;
+const V_BASE   = 3.258*3.6;
+const ONSET    = 40;
+const LAMBDA   = 0.0090;
 const FLOOR    = 0.55;
 
 const ROUTE = [
-  { id:'start',   name:'Start',         lkm:0,       asc:0,      desc:0,       soll:  0, ist:-1, estimate:-1, state:0 },
-  { id:'trindigg',name:'Trin Digg',     lkm:25.68,   asc:638,    desc:907.5,   soll:146, ist:-1, estimate:-1, state:0 },
-  { id:'tegiasut',name:'Tegia sut',     lkm:46.685,  asc:1908.5, desc:951.5,   soll:273, ist:-1, estimate:-1, state:0 },
-  { id:'bargis',  name:'Bargis',        lkm:62.51,   asc:2431,   desc:1908.5,  soll:383, ist:-1, estimate:-1, state:0 },
-  { id:'gronda',  name:'Tegia Gronda',  lkm:69.88,   asc:2948,   desc:1908.5,  soll:437, ist:-1, estimate:-1, state:0 },
-  { id:'segnes',  name:'Segneshütte',   lkm:87.255,  asc:3745.5, desc:2612.5,  soll:583, ist:-1, estimate:-1, state:0 },
-  { id:'nagens',  name:'Nagens',        lkm:90.896,  asc:3889.6, desc:2739,    soll:617, ist:-1, estimate:-1, state:0 },
-  { id:'cumin',   name:'Plaun Cumin',   lkm:94.525,  asc:4042.5, desc:2772,    soll:651, ist:-1, estimate:-1, state:0 },
-  { id:'station', name:'Plaun Station', lkm:109.265, asc:4416.5, desc:3806,    soll:800, ist:-1, estimate:-1, state:0 },
-  { id:'stenna',  name:'Stenna Center', lkm:116.325, asc:4482.5, desc:4477,    soll:876, ist:-1, estimate:-1, state:0 },
-  { id:'ziel',    name:'Ziel',          lkm:124.255, asc:4625.5, desc:4625.5,  soll:960, ist:-1, estimate:-1, state:0 },
+	{id: 'start',        name: 'Start',             lkm: 0.00,   asc: 0,    desc: 0,    soll: 0,   ist:-1, estimate:-1, state:0},
+	{id: 'au',           name: 'Au',                lkm: 11.24,  asc: 184,  desc: 593,  soll: 71,  ist:-1, estimate:-1, state:0},
+	{id: 'trindigg',     name: 'Trin Digg',         lkm: 26.56,  asc: 728,  desc: 970,  soll: 186, ist:-1, estimate:-1, state:0},
+	{id: 'tegiasut',     name: 'Tegia sut',         lkm: 46.72,  asc: 1901, desc: 1029, soll: 332, ist:-1, estimate:-1, state:0},
+	{id: 'bargis',       name: 'Bargis',            lkm: 62.99,  asc: 2460, desc: 1980, soll: 463, ist:-1, estimate:-1, state:0},
+	{id: 'tegiagronda',  name: 'Tegia Gronda',      lkm: 69.88,  asc: 2934, desc: 1983, soll: 512, ist:-1, estimate:-1, state:0},
+	{id: 'segneshütte',  name: 'Segneshütte',       lkm: 87.39,  asc: 3741, desc: 2712, soll: 647, ist:-1, estimate:-1, state:0},
+	{id: 'nagens',       name: 'Nagens',            lkm: 90.54,  asc: 3886, desc: 2835, soll: 671, ist:-1, estimate:-1, state:0},
+	{id: 'plauncumin',   name: 'Plaun Cumin',       lkm: 94.73,  asc: 4042, desc: 2888, soll: 703, ist:-1, estimate:-1, state:0},
+	{id: 'plaunstation', name: 'Plaun Station',     lkm: 110.20, asc: 4484, desc: 3933, soll: 830, ist:-1, estimate:-1, state:0},
+	{id: 'stennacenter', name: 'Stenna Center',     lkm: 117.64, asc: 4589, desc: 4606, soll: 893, ist:-1, estimate:-1, state:0},
+	{id: 'ziel',         name: 'Ziel',              lkm: 125.96, asc: 4786, desc: 4786, soll: 960, ist:-1, estimate:-1, state:0},
 ];
+
 
 IST = {
   "start": "5:05",
-  "trindigg":"7:32",
-  'tegiasut':"9:40",
-  'bargis': '11:52',
-  "gronda":"12:50"
+  "au": "6:17",
+  "tegiasut":"10:42",
+ // "trindigg":"7:31",
+ // 'tegiasut':"9:38",
+  'bargis': '13:28',
+ // "gronda":"12:22",
+ // "segnes":"15:10"
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -223,7 +227,10 @@ function nelderMead(f, x0, maxIter = 2000, tol = 1e-8) {
 // ── Fit v_base, onset, lambda to measured CPs ────────────────────────────────
 function fitParams() {
   function cost([vb, onset, lambda]) {
-    if (vb <= 0 || lambda <= 0 || onset < 0) return 1e12;
+    if (vb < 8 || vb > 12) return 1e12;
+    if (onset < 30 || onset > 90) return 1e12;
+    if (lambda < 0.001 || lambda > 0.05) return 1e12;    
+    
     let s = 0;
     for (const cp of ROUTE) {
       if (cp.state !== 1 || cp.lkm === 0) continue;
@@ -233,7 +240,6 @@ function fitParams() {
     return s;
   }
   const [vb, onset, lambda] = nelderMead(cost, [V_BASE, ONSET, LAMBDA]);
-  console.info("vBase: "+vb+" onset: "+onset+" lambda: "+lambda)
   return { vBase: vb, onset, lambda };
 }
 
@@ -250,9 +256,7 @@ function buildTable(istRaw, start) {
       lastMeasured = cp
       measured_count++
     }
-  }
-
-  
+  }  
 
   if (measured_count < 4){
       // Before Bargis, just use the deltas
@@ -272,8 +276,8 @@ function buildTable(istRaw, start) {
       // update fitParamsBar, set it visible
       document.getElementById('fpV0').textContent     = np.vBase.toFixed(2);
       document.getElementById('fpOnset').textContent  = np.onset.toFixed(1);
-      document.getElementById('fpLambda').textContent = np.lambda.toFixed(4);
-      document.getElementById('fitParamsBar').style.display = '';
+      document.getElementById('fpLambda').textContent = np.lambda.toFixed(3);
+      document.getElementById('fitParamsBarAdjusted').style.display = '';
 
       // predict
       for (const cp of ROUTE) {
@@ -293,7 +297,7 @@ function buildTable(istRaw, start) {
     const segLkm  = prev ? cp.lkm - prev.lkm : null;
     const segAsc  = prev ? cp.asc  - prev.asc  : null;
     const segDesc = prev ? cp.desc - prev.desc : null;
-    const segDur  = prev ? cp.modelMin - prev.modelMin : null;
+    const segDur  = prev ? cp.ist - prev.ist : null;
 
     const isMeasured = cp.state === 1
     
@@ -306,14 +310,14 @@ function buildTable(istRaw, start) {
     tr.innerHTML = `
       <td>${cp.name}</td>
       <td>${cp.lkm > 0 ? cp.lkm.toFixed(1) : '0'}</td>
-      <td class="up">${segAsc  != null ? Math.round(segAsc)  + ' m' : '—'}</td>
-      <td class="down">${segDesc != null ? Math.round(segDesc) + ' m' : '—'}</td>
-      <td>${segLkm  != null ? '+' + segLkm.toFixed(1) : '—'}</td>
-      <td>${durStr(segDur)}</td>
       <td>${toHHMM(cp.soll + start)}</td>
       <td class="ist-cell ${isMeasured ? 'measured' : 'projected'}">${toHHMM(cp.ist + start)}</td>
       <td class="delta-cell ${isMeasured ? dCls : 'projected' }">${dText}</td>
-    `;
+      <td>${segLkm  != null ? '+' + segLkm.toFixed(1) : '—'}</td>
+      <td>${durStr(segDur)}</td>
+      <td class="up">${segAsc  != null ? Math.round(segAsc)  + ' m' : '—'}</td>
+      <td class="down">${segDesc != null ? Math.round(segDesc) + ' m' : '—'}</td>
+  `;
     tbody.appendChild(tr);
   }
 }
@@ -343,8 +347,8 @@ async function loadIst() {
     buildTable(ist, start);
   } catch(e) {
     buildTable(null);
-    document.getElementById('fitBar').textContent = 'Fehler beim Laden von ist.txt.';
-    document.getElementById('fitBar').classList.add('error');
+    document.getElementById('fitParamsBarInitial').textContent = 'Fehler beim Laden von ist.txt.';
+    document.getElementById('fitParamsBarInitial').classList.add('error');
   }
 }
 
@@ -364,11 +368,12 @@ function parseIstTxt(text) {
 function matchId(key) {
   const map = {
     start: 'start',
-    trindigg: 'trindigg', trin_digg: 'trindigg',
+    au: 'au',
+    trindigg: 'trindigg', trin_digg: 'trindigg',trin: 'trindigg',
     tegiasut: 'tegiasut', tegia_sut: 'tegiasut',
     bargis:   'bargis',
-    tegiagrond: 'gronda', tegiagronda: 'gronda', gronda: 'gronda',
-    segnes: 'segnes', segneshütte: 'segnes',
+    tegiagrond: 'tegiagronda', tegiagronda: 'tegiagronda', gronda: 'tegiagronda',
+    segnes: 'segneshütte', segneshütte: 'segneshütte',
     nagens: 'nagens',
     cumin: 'cumin', plauncumin: 'cumin',
     station: 'station', plaunstation: 'station',
@@ -377,6 +382,12 @@ function matchId(key) {
   };
   return map[key.replace(/[-_\s]/g,'').toLowerCase()] || null;
 }
+
+
+  document.getElementById('pV0').textContent     = V_BASE.toFixed(2);
+  document.getElementById('pOnset').textContent  = ONSET.toFixed(1);
+  document.getElementById('pLambda').textContent = LAMBDA.toFixed(3);
+  document.getElementById('pFloor').textContent = FLOOR.toFixed(2);
 
 
 loadIst();
