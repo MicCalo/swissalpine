@@ -1,26 +1,32 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, HTTPException
 import uvicorn
 from coordinate import distance, Coord
 from segment import parse_segments
 import logging
+import re
+from datetime import datetime, timezone
 
-from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
-
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI()
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 track = parse_segments("segments.csv")
 
 def find(c: Coord):
     (best_dist, best_id) = (float("inf"), None)
-    for segment in track:       
+    for segment in track:
         dist = distance(c, segment.coord)
-        if (dist < best_dist):
+        if dist < best_dist:
             best_dist = dist
             best_id = segment.id
     return best_id
@@ -38,17 +44,35 @@ def index(request: Request):
     )
 
 @app.get("/log")
-def log(c: str):
-    logging.info(f"content={c}")
+@limiter.limit("30/minute")
+def log(request: Request, c: str):
+    safe_c = re.sub(r'[^\x20-\x7E]', '', c)[:100]
+    logging.info(f"content={safe_c}")
+
+    # 47.4924304,8.7412871,496.4000244140625,1782247587,70.0,mz
+
     tokens = c.split(",")
-    lat = float(tokens[0])
-    lon = float(tokens[1])
-    c = Coord(lat, lon)
-    best_id = find(c)
+    if len(tokens) != 6:
+        raise HTTPException(status_code=422, detail="Expected 'lat,lon,alt,ts,bat,mz'")
+    try:
+        lat = float(tokens[0])
+        lon = float(tokens[1])
+        alt = float(tokens[2])
+        ts = int(tokens[3])
+        time = datetime.fromtimestamp(ts)
+        print(f"lat={lat}, lon={lon}, alt={alt}, ts={ts} ({time}), bat={tokens[4]}, mz={tokens[5]}")
+    except ValueError:
+        raise HTTPException(status_code=422, detail="lat and lon must be numbers")
+    if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+        raise HTTPException(status_code=422, detail="lat/lon out of range")
+
+    coord = Coord(lat, lon)
+    best_id = find(coord)
     with open("log.txt", "a") as f:
-        f.write(f"{lat},{lon},{best_id}\n")
+        f.write(f"{safe_c.replace(',', ';')}\n")
     return {"ok": True, "best_id": best_id}
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+   # uvicorn.run(app, host="127.0.0.1", port=8016)
+   uvicorn.run(app, host="192.168.178.31", port=8016)
