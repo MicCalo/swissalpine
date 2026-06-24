@@ -23,3 +23,17 @@ class Track:
     @property
     def points_as_js_array(self):
            return f"[{','.join([f'[{s.coord.lat},{s.coord.lon}]' for s in self.points])}]"
+    
+    @property
+    def profile_as_js_array(self) -> str:
+        entries = []
+        #cumulative_dists = []
+        #elevations = []
+        #cumulative_dists.append(0)
+        #elevations.append(self.segments[0].start.elevation)
+        entries.append(f'{{"dist":0,"ele":{self.segments[0].start.elevation:.0f}}}')
+        dist = 0
+        for seg in self.segments:
+            dist += (seg.dist / 1000)
+            entries.append(f'{{"dist":{dist:.3f},"ele":{seg.end.elevation:.0f}}}')
+        return f'[{", ".join(entries)}]'

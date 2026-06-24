@@ -37,7 +37,7 @@ def _build_segment(
     gradient = alt_delta / dist_m if dist_m > 0 else 0.0
 
     seg = Segment(track=track, start_idx=start, end_idx=end)
-    seg.dist_m = dist_m
+    seg.dist = dist_m
     seg.alt_delta = alt_delta
     seg.gradient = gradient
     return seg

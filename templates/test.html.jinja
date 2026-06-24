@@ -39,12 +39,18 @@
 
             map.fitBounds(route.getBounds())
 
+            const data = {{ track.profile_as_js_array }};
+           
+            const plot = Plot.plot({
+                width: document.querySelector("#profile").clientWidth,
+                marks: [
+                    Plot.areaY(data, { x: 'dist', y: 'ele', y2: d3.min(data, d => d.ele), fill: '#8884' }),
+                    Plot.lineY(data, { x: 'dist', y: 'ele' })
+                ]
+            });
 
-            const plot = Plot.rectY({length: 10000}, 
-            Plot.binX({y: "count"}, {x: Math.random})).plot();
-            const div = document.querySelector("#profile");
-            div.append(plot);
+            document.querySelector("#profile").append(plot);
 
         </script>
     </body>
-<httml>
+<html>

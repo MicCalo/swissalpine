@@ -30,3 +30,11 @@ class Segment:
             object.__setattr__(self, name, value)
         else:
             self.__dict__.setdefault("_extra", {})[name] = value
+
+    @property
+    def start(self) -> DataPoint:
+        return self._track.points[self.start_idx]
+
+    @property
+    def end(self) -> DataPoint:
+        return self._track.points[self.end_idx]
