@@ -1,12 +1,12 @@
 from fastapi import FastAPI
 import uvicorn
-from coordinate import distance, Coord
-from segment import parse_segments
+from data_model.coordinate import distance, Coord
+from data_model.track import Track
 import logging
-
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+
 
 
 app = FastAPI()
@@ -14,7 +14,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 templates = Jinja2Templates(directory="templates")
 
-track = parse_segments("segments.csv")
+track = Track("../t808746431_k78-78.2-km.gpx")
 
 def find(c: Coord):
     (best_dist, best_id) = (float("inf"), None)
@@ -25,16 +25,13 @@ def find(c: Coord):
             best_id = segment.id
     return best_id
 
-def get_route():
-    route = f"[{''.join([f'[{s.coord.lat},{s.coord.lon}], ' for s in track])}]"
-    return route
-
+ 
 @app.get("/")
 def index(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="test.html.jinja",
-        context={"route": get_route()}
+        context={"track": track}
     )
 
 @app.get("/log")
