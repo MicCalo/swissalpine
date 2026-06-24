@@ -1,11 +1,12 @@
-from fastapi import FastAPI, Request, HTTPException
 import uvicorn
 from data_model.coordinate import distance, Coord
 from data_model.track import Track
 import logging
 import re
 from datetime import datetime, timezone
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import StreamingResponse
 from fastapi.templating import Jinja2Templates
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -38,6 +39,22 @@ def index(request: Request):
         request=request,
         name="test.html.jinja",
         context={"track": track}
+    )
+
+@app.get("/track.points.csv")
+def track_points_csv():
+    return StreamingResponse(
+        track.points_as_csv(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "inline; filename=track.points.csv"}
+    )
+
+@app.get("/track.segments.csv")
+def track_points_csv():
+    return StreamingResponse(
+        track.segments_as_csv(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "inline; filename=track.segments.csv"}
     )
 
 @app.get("/log")

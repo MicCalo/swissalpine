@@ -5,14 +5,15 @@
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
             integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
             crossorigin=""/>
-       <link href="{{ url_for('static', path='/styles.css') }}" rel="stylesheet">
-       <link id="favicon" rel="icon" type="image/x-icon" href="{{ url_for('static', path='/favicon.ico') }}">
-       <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        <link href="{{ url_for('static', path='/styles.css') }}" rel="stylesheet">
+        <link id="favicon" rel="icon" type="image/x-icon" href="{{ url_for('static', path='/favicon.ico') }}">
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
             integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
             crossorigin=""></script>
 
-       <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6"></script>
+        <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6"></script>
+        <script src="https://cdn.jsdelivr.net/npm/papaparse@5"></script>
     </head>
     
     <body>
@@ -21,11 +22,39 @@
         <div id="profile"></div>
 
         <script type="module">
+
+            async function getCsv(name) {
+                return new Promise((resolve, reject) => {
+                    Papa.parse(name, {
+                        download:true,
+                        dynamicTyping: true,
+                        header: true,
+                        skipEmptyLines: true,
+                        complete:(results) => {				
+                            resolve(results.data);
+                        }
+                    });
+                });
+            }
+ 
+            const track_points = await getCsv('track.points.csv');
+            const track_segments = await getCsv('track.segments.csv');
+
+            const color = '#cc0000'
+
+            let cumDist = 0;
+            for (const seg of track_segments) {
+                cumDist       += seg.dist / 1000;
+                const endPt = track_points[seg.end_idx];
+                seg.ele        = endPt.ele;
+                seg.cumDist = cumDist;
+            }
+
             const map = L.map('map');
 
             var route = L.polyline(
-                {{ track.points_as_js_array }},
-                {color: 'darkviolet', opacity: 0.6, weight:5}
+                track_points.map(p => [p.lat, p.lon]),
+                {color: color, opacity: 0.6, weight:5}
             )
 
             route.addTo(map);
@@ -39,31 +68,72 @@
 
             map.fitBounds(route.getBounds())
 
-            const data = {{ track.profile_as_js_array }};
+            //const data = {{ track.profile_as_js_array }};
            
             const plot = Plot.plot({
                 width: document.querySelector("#profile").clientWidth,
                 marks: [
-                    Plot.areaY(data, { x: 'dist', y: 'ele', y2: d3.min(data, d => d.ele), fill: '#8884' }),
-                    Plot.lineY(data, { x: 'dist', y: 'ele' }),
-                    Plot.crosshairX(data, { x: 'dist', y: 'ele' }),
-                    Plot.tip(data, Plot.pointerX({ x: 'dist', y: 'ele', title: d => `${d.dist.toFixed(1)} km, ${d.ele.toFixed(0)} m` }))
+                    Plot.areaY(track_segments, { x: 'cumDist', y: 'ele', y2: d3.min(track_segments, d => d.ele), fill: '#8884' }),
+                    Plot.lineY(track_segments, { x: 'cumDist', y: 'ele', stroke: color }),
+                    Plot.crosshairX(track_segments, { x: 'cumDist', y: 'ele' }),
+                    Plot.tip(track_segments, Plot.pointerX({ x: 'cumDist', y: 'ele', title: d => `${d.cumDist.toFixed(1)} km, ${d.ele.toFixed(0)} m` }))
                 ]
             });
 
             document.querySelector("#profile").append(plot);
 
+            let autoPan = true;
+
             const highlight = L.circleMarker([0, 0], {
-                radius: 10, color: 'darkviolet', fillColor: 'darkviolet', fillOpacity: 0.2, weight: 2
+                radius: 10, color: color, fillColor: color, fillOpacity: 0.2, weight: 2
             });
 
+            // Chart → Map
             plot.addEventListener("input", () => {
                 const d = plot.value;
-                if (d?.lat != null) {
-                    highlight.setLatLng([d.lat, d.lon]).addTo(map);
+                if (d){
+                    const center_idx = Math.trunc((d.start_idx + d.end_idx) / 2);
+                    const pt = track_points[center_idx];
+                    highlight.setLatLng([pt.lat, pt.lon]).addTo(map);
+                    if (autoPan && !map.getBounds().contains([pt.lat, pt.lon])){
+                        map.panTo([pt.lat, pt.lon], {animate: true, duration: 2.0});
+                    }
                 } else {
                     highlight.remove();
                 }
+            });
+
+            // Map → Chart: synthetic pointer events drive the same crosshair + tip
+            const xScale = plot.scale('x');
+            const yScale = plot.scale('y');
+            
+
+            map.on('mousemove', e => {
+                const plotRect = plot.getBoundingClientRect();
+
+                let best = null, bestDist = Infinity;
+                for (const d of track_points) {
+                    const m = map.distance(e.latlng, [d.lat, d.lon]);
+                    if (m < bestDist) { bestDist = m; best = d; }
+                }
+                let x = plotRect.left;   // SVG x=0, before marginLeft → outside frame
+                let y = plotRect.top + plotRect.height / 2;
+                if (best && bestDist < 300) {
+                    const seg = track_segments[best.seg_idx];
+                    x = plotRect.left + xScale.apply(seg.cumDist);
+                    y = plotRect.top  + yScale.apply(seg.ele);
+                    
+                } 
+
+                autoPan = false
+
+                plot.dispatchEvent(new PointerEvent('pointermove', {
+                        clientX: x,
+                        clientY: y,
+                        bubbles: true, pointerId: 1, isPrimary: true,
+                    }));
+
+                autoPan = true;
             });
 
         </script>

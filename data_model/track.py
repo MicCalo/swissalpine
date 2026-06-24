@@ -20,18 +20,21 @@ class Track:
         self.points = [DataPoint(e) for e in trk_seg]
         self.segments = segment_track(self)
 
-    @property
-    def points_as_js_array(self):
-           return f"[{','.join([f'[{s.coord.lat},{s.coord.lon}]' for s in self.points])}]"
-    
-    @property
-    def profile_as_js_array(self) -> str:
-        entries = []
-        start = self.segments[0].start
-        entries.append(f'{{"dist":0,"ele":{start.elevation:.0f}, "lat":{start.coord.lat}, "lon":{start.coord.lon}}}')
-        dist = 0
+        # assign segment indices to points
+        i = 0
         for seg in self.segments:
-            dist += (seg.dist / 1000)
-            pt = seg.end
-            entries.append(f'{{"dist":{dist:.3f},"ele":{pt.elevation:.0f}, "lat":{pt.coord.lat}, "lon":{pt.coord.lon}}}')
-        return f'[{", ".join(entries)}]'
+            for pt_idx in range(seg.start_idx, seg.end_idx):
+                self.points[pt_idx].segment_idx = i
+            i+=1
+        #as last point of a segment is also first point of next segment, and rage is exclusive last, the very last point is not assigned
+        self.points[-1].segment_idx = self.points[-2].segment_idx 
+
+    def points_as_csv(self):
+        yield "lat,lon,ele,seg_idx\n"
+        for p in self.points:
+            yield f"{p.coord.lat},{p.coord.lon},{p.elevation},{p.segment_idx}\n"
+    
+    def segments_as_csv(self):
+        yield "start_idx,end_idx,dist\n"
+        for s in self.segments:
+            yield f"{s.start_idx},{s.end_idx},{s.dist:.2f}\n"
