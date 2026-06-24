@@ -1,0 +1,5 @@
+fastapi
+uvicorn
+slowapi
+jinja2
+python-multipart
