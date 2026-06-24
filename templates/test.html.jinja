@@ -45,11 +45,26 @@
                 width: document.querySelector("#profile").clientWidth,
                 marks: [
                     Plot.areaY(data, { x: 'dist', y: 'ele', y2: d3.min(data, d => d.ele), fill: '#8884' }),
-                    Plot.lineY(data, { x: 'dist', y: 'ele' })
+                    Plot.lineY(data, { x: 'dist', y: 'ele' }),
+                    Plot.crosshairX(data, { x: 'dist', y: 'ele' }),
+                    Plot.tip(data, Plot.pointerX({ x: 'dist', y: 'ele', title: d => `${d.dist.toFixed(1)} km, ${d.ele.toFixed(0)} m` }))
                 ]
             });
 
             document.querySelector("#profile").append(plot);
+
+            const highlight = L.circleMarker([0, 0], {
+                radius: 10, color: 'darkviolet', fillColor: 'darkviolet', fillOpacity: 0.2, weight: 2
+            });
+
+            plot.addEventListener("input", () => {
+                const d = plot.value;
+                if (d?.lat != null) {
+                    highlight.setLatLng([d.lat, d.lon]).addTo(map);
+                } else {
+                    highlight.remove();
+                }
+            });
 
         </script>
     </body>
