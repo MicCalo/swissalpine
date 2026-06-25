@@ -1,7 +1,7 @@
 html, body   { height: 100%; margin: 0; overflow: hidden; }
 body         { display: flex; flex-direction: column; }
 #top         { display: flex; flex: 1; min-height: 0; }
-#map         { min-width: 0; width: 100%; }
+#map         { min-width: 0; width: 65%; }
 #table-wrapper { overflow-y: auto; min-width: 0; }
 #profile     { height: 240px; flex-shrink: 0; }
 

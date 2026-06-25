@@ -33,8 +33,24 @@ class Track:
         yield "lat,lon,ele,seg_idx,name\n"
         for p in self.points:
             yield f"{p.coord.lat},{p.coord.lon},{p.elevation},{p.segment_idx},{getattr(p, 'name', '')}\n"
-    
+
+    @property
+    def points_as_json(self):
+        return '['+','.join(self._points_as_json())+']'
+
+    def _points_as_json(self):
+         for p in self.points:
+            yield f"{{lat:{p.coord.lat},lon:{p.coord.lon},ele:{p.elevation},seg_idx:{p.segment_idx},name:\"{getattr(p, 'name', '')}\"}}"
+       
     def segments_as_csv(self):
         yield "start_idx,end_idx,dist\n"
         for s in self.segments:
-            yield f"{s.start_idx},{s.end_idx},{s.dist:.2f}\n"
+            yield f"{s.start_idx},{s.end_idx},{s.dist:.2f}\n"   
+        
+    @property
+    def segments_as_json(self):
+        return '['+','.join(self._segments_as_json())+']'
+    
+    def _segments_as_json(self):
+        for s in self.segments:
+            yield f"{{start_idx:{s.start_idx},end_idx:{s.end_idx},dist:{s.dist:.2f}}}"
