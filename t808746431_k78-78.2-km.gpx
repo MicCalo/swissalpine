@@ -2639,12 +2639,6 @@
       </trkpt>
       <trkpt lat="46.793759" lon="9.301813">
         <ele>726.9</ele>
-        <name>Gadastättli, Safiental</name>
-        <extensions>
-          <oa:Extension>
-            <oa:mapZoom>16</oa:mapZoom>
-          </oa:Extension>
-        </extensions>
       </trkpt>
       <trkpt lat="46.793792" lon="9.301852">
         <ele>726.5</ele>
