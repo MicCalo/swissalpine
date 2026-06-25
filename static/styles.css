@@ -5,3 +5,18 @@ body {
     font-family: sans-serif;
     background: #eee;
 }
+
+.map-cp-label {
+    background: #ffffff99;
+    border: none;
+    box-shadow: none;
+    color: black;
+    font-size: 14px;
+    padding: 0px;
+    
+}
+
+/* remove the default arrow/tip */
+.map-cp-label::before {
+    display: none;
+}

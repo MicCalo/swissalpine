@@ -21,7 +21,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-track = Track("../t808746431_k78-78.2-km.gpx")
+track = Track("t808746431_k78-78.2-km.gpx")
 
 def find(c: Coord):
     (best_dist, best_id) = (float("inf"), None)

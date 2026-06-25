@@ -30,9 +30,9 @@ class Track:
         self.points[-1].segment_idx = self.points[-2].segment_idx 
 
     def points_as_csv(self):
-        yield "lat,lon,ele,seg_idx\n"
+        yield "lat,lon,ele,seg_idx,name\n"
         for p in self.points:
-            yield f"{p.coord.lat},{p.coord.lon},{p.elevation},{p.segment_idx}\n"
+            yield f"{p.coord.lat},{p.coord.lon},{p.elevation},{p.segment_idx},{getattr(p, 'name', '')}\n"
     
     def segments_as_csv(self):
         yield "start_idx,end_idx,dist\n"

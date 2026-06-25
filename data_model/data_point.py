@@ -26,6 +26,8 @@ class DataPoint:
         try:
             return self.__dict__["_extra"][name]
         except KeyError:
+            if name == 'name':
+                return ''
             raise AttributeError(name)
 
     def __setattr__(self, name: str, value):
@@ -33,3 +35,4 @@ class DataPoint:
             object.__setattr__(self, name, value)
         else:
             self.__dict__.setdefault("_extra", {})[name] = value
+    

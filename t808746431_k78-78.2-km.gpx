@@ -1,9 +1,5 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<gpx version="1.1" 
-  creator="outdooractive - http://www.outdooractive.com"
-  xmlns="http://www.topografix.com/GPX/1/1"
-  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
+<?xml version='1.0' encoding='UTF-8'?>
+<gpx xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.1" creator="outdooractive - http://www.outdooractive.com" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
   <metadata>
     <name>K78 - 78.2 km</name>
     <author>
@@ -17,6 +13,7 @@
     <trkseg>
       <trkpt lat="46.823637" lon="9.277566">
         <ele>1071.7</ele>
+        <name>Start</name>
       </trkpt>
       <trkpt lat="46.823613" lon="9.277651">
         <ele>1071.7</ele>
@@ -2165,6 +2162,7 @@
       </trkpt>
       <trkpt lat="46.795267" lon="9.288165">
         <ele>661.0</ele>
+        <name>Au</name>
       </trkpt>
       <trkpt lat="46.795281" lon="9.288197">
         <ele>660.3</ele>
@@ -5846,6 +5844,7 @@
       </trkpt>
       <trkpt lat="46.824286" lon="9.355605">
         <ele>825.5</ele>
+        <name>Trin Digg</name>
       </trkpt>
       <trkpt lat="46.824301" lon="9.355582">
         <ele>825.7</ele>
@@ -8876,6 +8875,7 @@
       </trkpt>
       <trkpt lat="46.84725" lon="9.361594">
         <ele>1940.1</ele>
+        <name>Tegia sut</name>
       </trkpt>
       <trkpt lat="46.847259" lon="9.361634">
         <ele>1940.4</ele>
@@ -13757,6 +13757,7 @@
       </trkpt>
       <trkpt lat="46.854174" lon="9.326452">
         <ele>1549.4</ele>
+        <name>Bargis</name>
       </trkpt>
       <trkpt lat="46.854143" lon="9.326412">
         <ele>1549.7</ele>
@@ -14717,6 +14718,7 @@
       </trkpt>
       <trkpt lat="46.855585" lon="9.308615">
         <ele>2016.8</ele>
+        <name>Tegia Gronda</name>
       </trkpt>
       <trkpt lat="46.855457" lon="9.308404">
         <ele>2018.7</ele>
@@ -17744,6 +17746,7 @@
       </trkpt>
       <trkpt lat="46.867615" lon="9.239942">
         <ele>2102.3</ele>
+        <name>Segneshütte</name>
       </trkpt>
       <trkpt lat="46.867506" lon="9.239813">
         <ele>2102.5</ele>
@@ -18107,6 +18110,7 @@
       </trkpt>
       <trkpt lat="46.861589" lon="9.234341">
         <ele>2116.9</ele>
+        <name>Nagens</name>
       </trkpt>
       <trkpt lat="46.86161" lon="9.234014">
         <ele>2119.0</ele>
@@ -18767,6 +18771,7 @@
       </trkpt>
       <trkpt lat="46.862126" lon="9.208688">
         <ele>2225.5</ele>
+        <name>Plaun Cumin</name>
       </trkpt>
       <trkpt lat="46.862128" lon="9.208614">
         <ele>2225.2</ele>
@@ -23633,6 +23638,7 @@
       </trkpt>
       <trkpt lat="46.846004" lon="9.232015">
         <ele>1625.8</ele>
+        <name>Plaun Station</name>
       </trkpt>
       <trkpt lat="46.846013" lon="9.232387">
         <ele>1625.8</ele>
@@ -24767,6 +24773,7 @@
       </trkpt>
       <trkpt lat="46.832907" lon="9.28279">
         <ele>1080.5</ele>
+        <name>Stenna Center</name>
       </trkpt>
       <trkpt lat="46.832962" lon="9.282938">
         <ele>1081.4</ele>
@@ -26216,6 +26223,7 @@
       </trkpt>
       <trkpt lat="46.823608" lon="9.277668">
         <ele>1071.8</ele>
+        <name>Ziel</name>
       </trkpt>
       <trkpt lat="46.823635" lon="9.277612">
         <ele>1071.9</ele>

@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Swissalpine K78 · Marschtabelle</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:      #0D1117;
+      --surface: #161B22;
+      --border:  #30363D;
+      --accent:  #E8A838;
+      --text:    #F0F6FC;
+      --muted:   #8B949E;
+      --ok:      #3FB950;
+      --late:    #e05c5c;
+      --mono:    'DM Mono', monospace;
+    }
+    body { background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 13px; padding: 0 0 40px; }
+
+    header { padding: 20px 16px 14px; border-bottom: 1px solid var(--border); }
+    header h1 { font-size: 11px; font-weight: 400; letter-spacing: 0.15em; text-transform: uppercase; color: var(--muted); }
+    header p  { font-size: 17px; font-weight: 500; margin-top: 4px; }
+
+    .params { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 6px 20px; }
+    .param { font-size: 11px; color: var(--muted); }
+    .param span { color: var(--accent); }
+
+    .fit-bar {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--muted);
+      min-height: 36px;
+    }
+    .fit-bar span { color: var(--ok); }
+    .fit-bar.error { color: var(--late); }
+
+    .table-wrap { overflow-x: auto; padding: 0 16px; margin-top: 16px; }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      text-align: right; font-size: 10px; font-weight: 400;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--muted); padding: 4px 8px;
+      border-bottom: 1px solid var(--border); white-space: nowrap;
+    }
+    th:first-child { text-align: left; }
+    td {
+      padding: 7px 8px; border-bottom: 1px solid var(--border);
+      text-align: right; white-space: nowrap; color: var(--text);
+    }
+    td:first-child { text-align: left; }
+
+    tr.is-start  td { color: var(--muted); }
+    tr.is-input  td { color: var(--accent); }
+    tr.is-key    td { color: var(--ok); font-weight: 500; }
+
+    .ist-cell.measured  { color: var(--ok); }
+    .ist-cell.projected { color: var(--muted); font-style: italic; }
+    .delta-cell.ahead   { color: var(--ok); }
+    .delta-cell.behind  { color: var(--late); }
+    .delta-cell.projected  { color: var(--muted); font-style: italic; }
+
+    .up   { color: #e05c5c; }
+    .down { color: #5b8dee; }
+
+    .reload-btn {
+      float: right; background: none; border: 1px solid var(--border);
+      border-radius: 4px; color: var(--muted); font-family: var(--mono);
+      font-size: 10px; padding: 2px 8px; cursor: pointer; margin-top: -2px;
+    }
+    .reload-btn:hover { border-color: var(--muted); color: var(--text); }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Swissalpine K78 · 18. Juli 2025</h1>
+  <p>Marschtabelle</p>
+</header>
+
+<div class="params" id="fitParamsBarInitial">
+  <div class="param" style="color:var(--muted);font-size:10px;letter-spacing:.1em;text-transform:uppercase;align-self:center">init. →</div>
+  <div class="param">v₀ <span id="pV0">?</span> lkm/h</div>
+  <div class="param">onset <span id="pOnset">?</span> lkm</div>
+  <div class="param">λ <span id="pLambda">?</span></div>
+  <div class="param">floor <span  id="pFloor">?</span></div>
+</div>
+
+<div class="params" id="fitParamsBarAdjusted" style="display:none">
+  <div class="param" style="color:var(--muted);font-size:10px;letter-spacing:.1em;text-transform:uppercase;align-self:center">fit →</div>
+  <div class="param">v₀ <span id="fpV0" style="color:var(--ok)"></span> lkm/h</div>
+  <div class="param">onset <span id="fpOnset" style="color:var(--ok)"></span> lkm</div>
+  <div class="param">λ <span id="fpLambda" style="color:var(--ok)"></span></div>
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Posten</th>
+        <th>lkm</th>
+        <th>Soll</th>
+        <th>Ist</th>
+        <th>Δ</th>
+        <th>+lkm</th>
+        <th>Dauer</th>
+        <th>↑</th>
+        <th>↓</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<script>
+
+// ── Model params ────────────────────────────────────────────────────────────
+const V_BASE   = 3.258*3.6;
+const ONSET    = 40;
+const LAMBDA   = 0.0090;
+const FLOOR    = 0.55;
+
+const ROUTE = [
+	{id: 'start',        name: 'Start',             lkm: 0.00,   asc: 0,    desc: 0,    soll: 0,   ist:-1, estimate:-1, state:0},
+	{id: 'au',           name: 'Au',                lkm: 11.24,  asc: 184,  desc: 593,  soll: 71,  ist:-1, estimate:-1, state:0},
+	{id: 'trindigg',     name: 'Trin Digg',         lkm: 26.56,  asc: 728,  desc: 970,  soll: 186, ist:-1, estimate:-1, state:0},
+	{id: 'tegiasut',     name: 'Tegia sut',         lkm: 46.72,  asc: 1901, desc: 1029, soll: 332, ist:-1, estimate:-1, state:0},
+	{id: 'bargis',       name: 'Bargis',            lkm: 62.99,  asc: 2460, desc: 1980, soll: 463, ist:-1, estimate:-1, state:0},
+	{id: 'tegiagronda',  name: 'Tegia Gronda',      lkm: 69.88,  asc: 2934, desc: 1983, soll: 512, ist:-1, estimate:-1, state:0},
+	{id: 'segneshütte',  name: 'Segneshütte',       lkm: 87.39,  asc: 3741, desc: 2712, soll: 647, ist:-1, estimate:-1, state:0},
+	{id: 'nagens',       name: 'Nagens',            lkm: 90.54,  asc: 3886, desc: 2835, soll: 671, ist:-1, estimate:-1, state:0},
+	{id: 'plauncumin',   name: 'Plaun Cumin',       lkm: 94.73,  asc: 4042, desc: 2888, soll: 703, ist:-1, estimate:-1, state:0},
+	{id: 'plaunstation', name: 'Plaun Station',     lkm: 110.20, asc: 4484, desc: 3933, soll: 830, ist:-1, estimate:-1, state:0},
+	{id: 'stennacenter', name: 'Stenna Center',     lkm: 117.64, asc: 4589, desc: 4606, soll: 893, ist:-1, estimate:-1, state:0},
+	{id: 'ziel',         name: 'Ziel',              lkm: 125.96, asc: 4786, desc: 4786, soll: 960, ist:-1, estimate:-1, state:0},
+];
+
+
+IST = {
+  "start": "5:05",
+  "au": "6:17",
+  "tegiasut":"10:42",
+ // "trindigg":"7:31",
+ // 'tegiasut':"9:38",
+  'bargis': '13:28',
+ // "gronda":"12:22",
+ // "segnes":"15:10"
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+function fatigue(lkm) {
+  return Math.max(FLOOR, Math.exp(-LAMBDA * Math.max(0, lkm - ONSET)));
+}
+function fatigueMid(a, b) {
+  return (fatigue(a) + fatigue(b)) / 2;
+}
+function toMin(hhmm) {
+  if (!hhmm || hhmm === '?') return null;
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+}
+function toHHMM(min) {
+  if (min == null) return '—';
+  const h = Math.floor(min / 60) % 24;
+  const m = Math.round(min % 60);
+  return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+}
+function durStr(min) {
+  if (!min || min <= 0) return '—';
+  const h = Math.floor(min / 60), m = Math.round(min % 60);
+  return h > 0 ? `${h}h ${m}min` : `${m}min`;
+}
+function deltaStr(d) {
+  if (d == null) return { text: '—', cls: '' };
+  const sign = d >= 0 ? '+' : '−';
+  const abs = Math.abs(Math.round(d));
+  const h = Math.floor(abs / 60), m = abs % 60;
+  const text = h > 0 ? `${sign}${h}h${m}` : `${sign}${m}min`;
+  return { text, cls: d <= 0 ? 'ahead' : 'behind' };
+}
+
+// ── Predict relative minutes via numerical integration ───────────────────────
+function predictRelMin(lkm, vb, onset, lambda) {
+  if (lkm <= 0) return 0;
+  const N = Math.ceil(lkm * 10);
+  const dl = lkm / N;
+  let t = 0;
+  for (let i = 0; i < N; i++) {
+    const l = (i + 0.5) * dl;
+    t += dl / (vb * Math.max(FLOOR, Math.exp(-lambda * Math.max(0, l - onset))));
+  }
+  return t * 60;
+}
+
+// ── Nelder-Mead simplex optimizer ────────────────────────────────────────────
+function nelderMead(f, x0, maxIter = 2000, tol = 1e-8) {
+  const n = x0.length;
+  let s = [x0.slice()];
+  for (let i = 0; i < n; i++) {
+    const v = x0.slice(); v[i] = v[i] !== 0 ? v[i] * 1.1 : 0.025; s.push(v);
+  }
+  let fv = s.map(f);
+  for (let iter = 0; iter < maxIter; iter++) {
+    const ord = [...Array(n + 1).keys()].sort((a, b) => fv[a] - fv[b]);
+    s = ord.map(i => s[i]); fv = ord.map(i => fv[i]);
+    if (fv[n] - fv[0] < tol) break;
+    const c = Array(n).fill(0);
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) c[j] += s[i][j] / n;
+    const xr = c.map((ci, j) => 2 * ci - s[n][j]); const fr = f(xr);
+    if (fr < fv[0]) {
+      const xe = c.map((ci, j) => 3 * ci - 2 * s[n][j]); const fe = f(xe);
+      [s[n], fv[n]] = fe < fr ? [xe, fe] : [xr, fr];
+    } else if (fr < fv[n - 1]) {
+      [s[n], fv[n]] = [xr, fr];
+    } else {
+      const xc = c.map((ci, j) => 0.5 * (ci + s[n][j])); const fc = f(xc);
+      if (fc < fv[n]) { [s[n], fv[n]] = [xc, fc]; }
+      else { for (let i = 1; i <= n; i++) { s[i] = s[0].map((v, j) => 0.5 * (v + s[i][j])); fv[i] = f(s[i]); } }
+    }
+  }
+  return s[0];
+}
+
+// ── Fit v_base, onset, lambda to measured CPs ────────────────────────────────
+function fitParams() {
+  function cost([vb, onset, lambda]) {
+    if (vb < 8 || vb > 12) return 1e12;
+    if (onset < 30 || onset > 90) return 1e12;
+    if (lambda < 0.001 || lambda > 0.05) return 1e12;    
+    
+    let s = 0;
+    for (const cp of ROUTE) {
+      if (cp.state !== 1 || cp.lkm === 0) continue;
+      const d = predictRelMin(cp.lkm, vb, onset, lambda) - cp.ist;
+      s += d * d;
+    }
+    return s;
+  }
+  const [vb, onset, lambda] = nelderMead(cost, [V_BASE, ONSET, LAMBDA]);
+  return { vBase: vb, onset, lambda };
+}
+
+// ── Build table ──────────────────────────────────────────────────────────────
+function buildTable(istRaw, start) {
+  lastMeasured = null
+  measured_count = 0
+  if (istRaw) {
+    for (const [k, v] of Object.entries(istRaw)) {
+      const id = matchId(k);
+      cp = ROUTE.find(cp => cp.id === id)
+      cp.ist = v
+      cp.state = 1
+      lastMeasured = cp
+      measured_count++
+    }
+  }  
+
+  if (measured_count < 4){
+      // Before Bargis, just use the deltas
+      last = null
+      for (const cp of ROUTE) {
+        if (cp.state === 0){
+          delta = cp.soll - last.soll
+          cp.ist = last.ist + delta
+        }
+
+        last = cp
+      }
+  } else{
+      // start fitting after Bargis
+      np = fitParams()
+
+      // update fitParamsBar, set it visible
+      document.getElementById('fpV0').textContent     = np.vBase.toFixed(2);
+      document.getElementById('fpOnset').textContent  = np.onset.toFixed(1);
+      document.getElementById('fpLambda').textContent = np.lambda.toFixed(3);
+      document.getElementById('fitParamsBarAdjusted').style.display = '';
+
+      // predict
+      for (const cp of ROUTE) {
+        if (cp.state === 0) cp.ist = predictRelMin(cp.lkm, np.vBase, np.onset, np.lambda);
+      }
+  }
+
+  // Build rows
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+
+
+  for (let i = 0; i < ROUTE.length; i++) {
+    const cp = ROUTE[i];
+    const prev = i > 0 ? ROUTE[i-1] : null;
+
+    const segLkm  = prev ? cp.lkm - prev.lkm : null;
+    const segAsc  = prev ? cp.asc  - prev.asc  : null;
+    const segDesc = prev ? cp.desc - prev.desc : null;
+    const segDur  = prev ? cp.ist - prev.ist : null;
+
+    const isMeasured = cp.state === 1
+    
+    const delta2 = cp.ist - cp.soll;
+    const { text: dText, cls: dCls } = deltaStr(delta2);
+
+
+    const tr = document.createElement('tr');
+
+    tr.innerHTML = `
+      <td>${cp.name}</td>
+      <td>${cp.lkm > 0 ? cp.lkm.toFixed(1) : '0'}</td>
+      <td>${toHHMM(cp.soll + start)}</td>
+      <td class="ist-cell ${isMeasured ? 'measured' : 'projected'}">${toHHMM(cp.ist + start)}</td>
+      <td class="delta-cell ${isMeasured ? dCls : 'projected' }">${dText}</td>
+      <td>${segLkm  != null ? '+' + segLkm.toFixed(1) : '—'}</td>
+      <td>${durStr(segDur)}</td>
+      <td class="up">${segAsc  != null ? Math.round(segAsc)  + ' m' : '—'}</td>
+      <td class="down">${segDesc != null ? Math.round(segDesc) + ' m' : '—'}</td>
+  `;
+    tbody.appendChild(tr);
+  }
+}
+
+// ── Fetch ist.txt ────────────────────────────────────────────────────────────
+const IST_URL = 'https://raw.githubusercontent.com/MicCalo/swissalpine/main/ist.txt';
+
+async function loadIst() {
+  try {
+    let start = 300
+    ist = {}
+    if (false){
+      const r = await fetch(IST_URL + '?t=' + Date.now());
+      if (!r.ok) { buildTable(null); return; }
+      const text = await r.text();
+      ist = parseIstTxt(text)
+    }else{
+      start = null
+      for (const [key, value] of Object.entries(IST)) {
+        min = toMin(value)
+        if (!start) start = min;
+        min -= start
+        ist[key] = min
+      }
+    }
+
+    buildTable(ist, start);
+  } catch(e) {
+    buildTable(null);
+    document.getElementById('fitParamsBarInitial').textContent = 'Fehler beim Laden von ist.txt.';
+    document.getElementById('fitParamsBarInitial').classList.add('error');
+  }
+}
+
+// ── Parse ist.txt ────────────────────────────────────────────────────────────
+function parseIstTxt(text) {
+  const result = {};
+  for (const line of text.split('\n')) {
+    const m = line.trim().match(/^(\w+)\s*=\s*(\S+)/);
+    if (!m) continue;
+    const val = m[2] === '?' ? null : m[2];
+    result[m[1].toLowerCase()] = val;
+  }
+  return result;
+}
+
+// Map ist.txt keys to ROUTE ids (flexible matching)
+function matchId(key) {
+  const map = {
+    start: 'start',
+    au: 'au',
+    trindigg: 'trindigg', trin_digg: 'trindigg',trin: 'trindigg',
+    tegiasut: 'tegiasut', tegia_sut: 'tegiasut',
+    bargis:   'bargis',
+    tegiagrond: 'tegiagronda', tegiagronda: 'tegiagronda', gronda: 'tegiagronda',
+    segnes: 'segneshütte', segneshütte: 'segneshütte',
+    nagens: 'nagens',
+    cumin: 'cumin', plauncumin: 'cumin',
+    station: 'station', plaunstation: 'station',
+    stenna: 'stenna', stennacenter: 'stenna',
+    ziel: 'ziel',
+  };
+  return map[key.replace(/[-_\s]/g,'').toLowerCase()] || null;
+}
+
+
+  document.getElementById('pV0').textContent     = V_BASE.toFixed(2);
+  document.getElementById('pOnset').textContent  = ONSET.toFixed(1);
+  document.getElementById('pLambda').textContent = LAMBDA.toFixed(3);
+  document.getElementById('pFloor').textContent = FLOOR.toFixed(2);
+
+
+loadIst();
+</script>
+</body>
+</html>
