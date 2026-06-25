@@ -6,6 +6,21 @@ body {
     background: #eee;
 }
 
+.table-wrap { overflow-x: auto; padding: 0 16px; margin-top: 16px; }
+table { width: 100%; border-collapse: collapse; }
+th {
+    text-align: right; font-size: 10px; font-weight: 400;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--muted); padding: 4px 8px;
+    border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+th:first-child { text-align: left; }
+td {
+    padding: 7px 8px; border-bottom: 1px solid var(--border);
+    text-align: right; white-space: nowrap; color: var(--text);
+}
+td:first-child { text-align: left; }
+
 .map-cp-label {
     background: #ffffff99;
     border: none;
