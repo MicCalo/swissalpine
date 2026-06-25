@@ -6,10 +6,12 @@ const { points: trackPoints, segments: trackSegments } = window.RAW;
 
 // Derive cumDist and ele on each segment
 let cumDist = 0;
+let gapCumDist = 0;
 for (const seg of trackSegments) {
     cumDist     += seg.dist / 1000;
     seg.ele      = trackPoints[seg.end_idx].ele;
     seg.cumDist  = cumDist;
+
 }
 
 // Checkpoint list: named track points enriched with cumDist
