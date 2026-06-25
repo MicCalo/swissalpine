@@ -14,15 +14,14 @@
         <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
         <script src="https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6"></script>
         <script src="https://cdn.jsdelivr.net/npm/papaparse@5"></script>
+        <script src="https://cdn.jsdelivr.net/npm/split.js@1"></script>
     </head>
     
     <body>
-        <h1>Test...</h1>
-        <div id="map"></div>
-        <div id="profile"></div>
-
-        
-        <div class="table-wrap">
+        <body>
+        <div id="top">
+            <div id="map"></div>
+            <div id="table-wrapper">
             <table>
                 <thead>
                 <tr>
@@ -39,7 +38,15 @@
                 </thead>
                 <tbody id="tbody"></tbody>
             </table>
+            </div>
         </div>
+        <div id="profile"></div>
+        </body>
+
+        <!--
+        <div class="table-wrap">
+            
+        </div>-->
 
         <script type="module">
             async function getCsv(name) {
@@ -108,21 +115,32 @@
             map.fitBounds(route.getBounds())
             
             // Populate height profile plot
-            const plot = Plot.plot({
-                width: document.querySelector("#profile").clientWidth,
-                marks: [
-                     //Plot.ruleX(checkpoints, { x: 'cumDist', stroke: '#aaa', strokeDasharray: '3 2' }),
-                    Plot.dot(check_points, { x: 'cumDist', y: 'ele', fill: color, r: 4 }),
-                    Plot.text(check_points, { x: 'cumDist', y: 'ele', text: 'name', dy: -20, fontSize: 10, textAnchor: 'middle' }),
+            let plot, xScale, yScale;  
+            function buildPlot() {
 
-                    Plot.areaY(track_segments, { x: 'cumDist', y: 'ele', y2: d3.min(track_segments, d => d.ele), fill: '#8884' }),
-                    Plot.lineY(track_segments, { x: 'cumDist', y: 'ele', stroke: color }),
-                    Plot.crosshairX(track_segments, { x: 'cumDist', y: 'ele' }),
-                    Plot.tip(track_segments, Plot.pointerX({ x: 'cumDist', y: 'ele', title: d => `${d.cumDist.toFixed(1)} km, ${d.ele.toFixed(0)} m` }))
-                ]
-            });
 
-            document.querySelector("#profile").append(plot);
+                const div = document.querySelector("#profile");
+                if (plot) plot.remove();
+                plot = Plot.plot({
+                    width:  div.clientWidth,
+                    height: div.clientHeight,
+                    marks: [
+                        //Plot.ruleX(check_points, { x: 'cumDist', stroke: '#aaa', strokeDasharray: '3 2' }),
+                        Plot.dot(check_points, { x: 'cumDist', y: 'ele', fill: color, r: 4 }),
+                        Plot.text(check_points, { x: 'cumDist', y: 'ele', text: 'name', dy: -20, fontSize: 10, textAnchor: 'middle' }),
+                        Plot.areaY(track_segments, { x: 'cumDist', y: 'ele', y2: d3.min(track_segments, d => d.ele), fill: '#8884' }),
+                        Plot.lineY(track_segments, { x: 'cumDist', y: 'ele', stroke: color }),
+                        Plot.crosshairX(track_segments, { x: 'cumDist', y: 'ele' }),
+                        Plot.tip(track_segments, Plot.pointerX({ x: 'cumDist', y: 'ele', title: d => `${d.cumDist.toFixed(1)} km, ${d.ele.toFixed(0)} m` }))
+                    ]
+                });
+                div.append(plot);
+                xScale = plot.scale('x');
+                yScale = plot.scale('y');
+                plot.addEventListener("input", onPlotInput);
+            }
+
+            buildPlot();
 
             let autoPan = true;
 
@@ -154,23 +172,23 @@
             } 
 
             // Chart → Map
-            plot.addEventListener("input", () => {
+            function onPlotInput() {
                 const d = plot.value;
-                if (d){
+                if (d) {
                     const center_idx = Math.trunc((d.start_idx + d.end_idx) / 2);
                     const pt = track_points[center_idx];
                     highlight.setLatLng([pt.lat, pt.lon]).addTo(map);
-                    if (autoPan && !map.getBounds().contains([pt.lat, pt.lon])){
+                    if (autoPan && !map.getBounds().contains([pt.lat, pt.lon])) {
                         map.panTo([pt.lat, pt.lon], {animate: true, duration: 2.0});
                     }
                 } else {
                     highlight.remove();
                 }
-            });
+            }
 
             // Map → Chart: synthetic pointer events drive the same crosshair + tip
-            const xScale = plot.scale('x');
-            const yScale = plot.scale('y');            
+            xScale = plot.scale('x');
+            yScale = plot.scale('y');            
 
             map.on('mousemove', e => {
                 const plotRect = plot.getBoundingClientRect();
@@ -199,6 +217,10 @@
 
                 autoPan = true;
             });
+
+
+            Split(['#map', '#table-wrapper'], { sizes: [65, 35], gutterSize: 6, onDrag: () => map.invalidateSize(), onDragEnd: () => buildPlot() });
+            Split(['#top', '#profile'], { direction: 'vertical', sizes: [65, 35], gutterSize: 6, onDragEnd: () => { map.invalidateSize(); buildPlot(); } });
 
         </script>
     </body>

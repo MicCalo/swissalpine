@@ -5844,7 +5844,6 @@
       </trkpt>
       <trkpt lat="46.824286" lon="9.355605">
         <ele>825.5</ele>
-        <name>Trin Digg</name>
       </trkpt>
       <trkpt lat="46.824301" lon="9.355582">
         <ele>825.7</ele>
@@ -5857,6 +5856,7 @@
       </trkpt>
       <trkpt lat="46.824402" lon="9.355351">
         <ele>828.1</ele>
+        <name>Trin Digg</name>
       </trkpt>
       <trkpt lat="46.824433" lon="9.355252">
         <ele>829.0</ele>
@@ -8875,7 +8875,6 @@
       </trkpt>
       <trkpt lat="46.84725" lon="9.361594">
         <ele>1940.1</ele>
-        <name>Tegia sut</name>
       </trkpt>
       <trkpt lat="46.847259" lon="9.361634">
         <ele>1940.4</ele>
@@ -8894,6 +8893,7 @@
       </trkpt>
       <trkpt lat="46.847405" lon="9.361757">
         <ele>1942.7</ele>
+        <name>Tegia sut</name>
       </trkpt>
       <trkpt lat="46.847416" lon="9.361748">
         <ele>1942.8</ele>
@@ -14718,7 +14718,6 @@
       </trkpt>
       <trkpt lat="46.855585" lon="9.308615">
         <ele>2016.8</ele>
-        <name>Tegia Gronda</name>
       </trkpt>
       <trkpt lat="46.855457" lon="9.308404">
         <ele>2018.7</ele>
@@ -14854,6 +14853,7 @@
       </trkpt>
       <trkpt lat="46.854817" lon="9.304557">
         <ele>2056.8</ele>
+        <name>Tegia Gronda</name>
       </trkpt>
       <trkpt lat="46.854883" lon="9.304466">
         <ele>2057.5</ele>
@@ -26223,13 +26223,13 @@
       </trkpt>
       <trkpt lat="46.823608" lon="9.277668">
         <ele>1071.8</ele>
-        <name>Ziel</name>
       </trkpt>
       <trkpt lat="46.823635" lon="9.277612">
         <ele>1071.9</ele>
       </trkpt>
       <trkpt lat="46.823645" lon="9.277574">
         <ele>1071.8</ele>
+        <name>Ziel</name>
       </trkpt>
     </trkseg>
   </trk>
