@@ -1,7 +1,7 @@
-function getFatigueMultiplier(model, cumulativeGapKm)
+function getFatigueMultiplier(model, cumulativeLkm)
 {
-    if (cumulativeGapKm <= model.onset) return 1.0;
-    return model.floor + (1.0 - model.floor) * Math.Exp(-model.lambda * (cumulativeGapKm - model.onset));
+    if (cumulativeLkm <= model.onset) return 1.0;
+    return model.floor + (1.0 - model.floor) * Math.exp(-model.lambda * (cumulativeLkm - model.onset));
 }
 
 function poly(input, poly){
@@ -25,7 +25,7 @@ function poly(input, poly){
     throw "not supported";
 }
 
-function getGradeAjustment(gradient, gapPolys)
+export function getGradeAjustment(gradient, gapPolys)
 {
     if (gradient>0)
     {
@@ -34,10 +34,10 @@ function getGradeAjustment(gradient, gapPolys)
     return poly(gradient, gapPolys[1])
 }
 
-function predictedSpeed(model, seg, cumulativeGapKm, baseSpeed)
+function predictedSpeed(model, seg, cumulativeLkm, baseSpeed)
 {
-    //let gradeAdjustment = _gradeAdjustment.Evaluate(seg.Gradient);
-    let fatigue = getFatigueMultiplier(model,  cumulativeGapKm);
+    //let gradeAdjustment = getGradeAjustment(seg.grad);
+    let fatigue = getFatigueMultiplier(model,  cumulativeLkm);
     return baseSpeed * fatigue / gradeAdjustment;
 }
 

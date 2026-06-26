@@ -50,7 +50,7 @@ def track_points_csv():
     )
 
 @app.get("/track.segments.csv")
-def track_points_csv():
+def track_segments_csv():
     return StreamingResponse(
         track.segments_as_csv(),
         media_type="text/csv",
@@ -89,4 +89,4 @@ def log(request: Request, c: str):
 
 if __name__ == "__main__":
    # uvicorn.run(app, host="127.0.0.1", port=8016)
-   uvicorn.run(app, host="192.168.178.90", port=8016)
+   uvicorn.run(app, host="192.168.178.31", port=8016)

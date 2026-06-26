@@ -1,17 +1,32 @@
 import { initMap } from '/static/map-view.js';
 import { buildPlot, getPlot, getXScale, getYScale } from '/static/chart-view.js';
+import { getGradeAjustment } from '/static/model.js';
 
 const COLOR = '#cc0000';
-const { points: trackPoints, segments: trackSegments } = window.RAW;
+const { points: trackPoints, segments: trackSegments, gapPolys } = window.RAW
 
 // Derive cumDist and ele on each segment
 let cumDist = 0;
-let gapCumDist = 0;
+let cumLkm = 0;
 for (const seg of trackSegments) {
-    cumDist     += seg.dist / 1000;
+    let segDistKm = seg.dist / 1000.0;
+    cumDist     += segDistKm;
     seg.ele      = trackPoints[seg.end_idx].ele;
     seg.cumDist  = cumDist;
-
+    seg.totalAscent = 0
+    seg.totalDescent = 0
+    for (let i = seg.start_idx; i < seg.end_idx; i++) {
+        const delta = trackPoints[i + 1].ele - trackPoints[i].ele;
+        if (delta > 0) {
+            seg.totalAscent += delta;
+        } else {
+            seg.totalDescent -= delta;
+        }
+    }
+    let lkm = seg.totalAscent/100 + segDistKm
+    cumLkm += lkm;
+    seg.cumLkm = cumLkm;
+    seg.gradAdj = getGradeAjustment(seg.grad/100, gapPolys);
 }
 
 // Checkpoint list: named track points enriched with cumDist
