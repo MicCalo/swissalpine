@@ -73,7 +73,7 @@ predict(trackSegments, checkPoints, targetParams);
 
 
 // Map
-const { map, highlight } = initMap(trackPoints, checkPoints, COLOR);
+const { map, highlight, actualPosition } = initMap(trackPoints, checkPoints, COLOR);
 
 // Chart
 let autoPan = true;
@@ -144,10 +144,18 @@ for (const cp of checkPoints) {
         <td>${cp.dist ? cp.dist.toFixed(1) : '-'}</td>     <!-- next -> -->
         <td>${cp.ascent ? cp.ascent.toFixed(0) : '-'}</td>     <!-- next up-->
         <td>${cp.descent ? cp.descent.toFixed(0) : '-'}</td>     <!-- next down -->
-        <td>${cp.cumLkm.toFixed(0)}</td>     <!-- lkm -->        
+        <td>${cp.cumLkm.toFixed(0)}</td>     <!-- lkm -->
     `;
     tbody.appendChild(tr);
 }
+
+const evtSource = new EventSource("/position");
+
+evtSource.addEventListener("posUpdate", (event) => {
+    const data = JSON.parse(event.data)
+    console.info("posUpdate: "+data.lat+"/"+data.lon+", ele: "+data.ele);
+    actualPosition.setLatLng([data.lat, data.lon]).addTo(map);
+});
 
 // Layout — resizable split panels
 Split(['#map', '#table-wrapper'], {

@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import List
 from data_model.data_point import DataPoint
+from data_model.coordinate import Coord, distance
 from data_model.segment import Segment
 import xml.etree.ElementTree as ET
 import logging
@@ -28,6 +29,15 @@ class Track:
             i+=1
         #as last point of a segment is also first point of next segment, and rage is exclusive last, the very last point is not assigned
         self.points[-1].segment_idx = self.points[-2].segment_idx 
+
+    def find(self, c: Coord):
+        (best_dist, best_id) = (float("inf"), None)
+        for i, pt in enumerate(self.points):
+            dist = distance(c, pt.coord)
+            if dist < best_dist:
+                best_dist = dist
+                best_id = i
+        return (best_id, dist / 1000)    
 
     def points_as_csv(self):
         yield "lat,lon,ele,seg_idx,name\n"

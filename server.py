@@ -11,6 +11,12 @@ from fastapi.templating import Jinja2Templates
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from fastapi.sse import EventSourceResponse, ServerSentEvent
+from collections.abc import AsyncIterable, Iterable
+import asyncio
+from pydantic import BaseModel
+
+
 
 
 limiter = Limiter(key_func=get_remote_address)
@@ -23,16 +29,9 @@ templates = Jinja2Templates(directory="templates")
 
 track = Track("data/t808746431_k78-78.2-km.gpx")
 
-def find(c: Coord):
-    (best_dist, best_id) = (float("inf"), None)
-    for segment in track:
-        dist = distance(c, segment.coord)
-        if dist < best_dist:
-            best_dist = dist
-            best_id = segment.id
-    return best_id
+latest_position: dict | None = None
+position_event = asyncio.Event()
 
- 
 @app.get("/")
 def index(request: Request):
     return templates.TemplateResponse(
@@ -71,14 +70,22 @@ def log(request: Request, c: str):
     try:
         lat = float(tokens[0])
         lon = float(tokens[1])
-        alt = float(tokens[2])
+        ele = float(tokens[2])
         ts = int(tokens[3])
+        bat = int(tokens[4])
         time = datetime.fromtimestamp(ts)
-        print(f"lat={lat}, lon={lon}, alt={alt}, ts={ts} ({time}), bat={tokens[4]}, mz={tokens[5]}")
+        print(f"lat={lat}, lon={lon}, ele={ele}, ts={ts} ({time}), bat={tokens[4]}, mz={tokens[5]}")
     except ValueError:
         raise HTTPException(status_code=422, detail="lat and lon must be numbers")
     if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
         raise HTTPException(status_code=422, detail="lat/lon out of range")
+    
+    pt_idx, dist = track.find(Coord(lat, lon))
+    global latest_position
+    latest_position = {'lat': lat, 'lon': lon,'ele':ele, 'bat': bat, 'ts':ts}
+    if (dist<100):
+        latest_position['pt_idx'] = pt_idx
+    position_event.set()
    
     file = f"data/actual/log_{tokens[5]}_{time.date().isoformat()}.log"
     with open(file, "a") as f:
@@ -86,5 +93,15 @@ def log(request: Request, c: str):
     return {"ok": True}
 
 
+
+@app.get("/position", response_class=EventSourceResponse)
+async def position() -> AsyncIterable[ServerSentEvent]:
+    i = 0
+    while True:
+        await position_event.wait()   # blocks until GPS ping arrives
+        position_event.clear()        # reset for next ping
+        i += 1
+        yield ServerSentEvent(data=latest_position, event='posUpdate', id=str(i))
+
 if __name__ == "__main__":
-   uvicorn.run(app, host="127.0.0.1", port=8016)
+   uvicorn.run(app, host="192.168.178.90", port=8016)

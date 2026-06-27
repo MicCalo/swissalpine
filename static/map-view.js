@@ -22,8 +22,12 @@ export function initMap(trackPoints, checkPoints, color) {
     map.fitBounds(route.getBounds());
 
     const highlight = L.circleMarker([0, 0], {
-        radius: 10, color, fillColor: color, fillOpacity: 0.2, weight: 2
+        radius: 15, color, fillColor: color, fillOpacity: 0.2, weight: 2
+    });
+    
+    const actualPosition = L.circleMarker([0, 0], {
+        radius: 20, color: 'blue', fillColor: 'blue', fillOpacity: 0.2, weight: 2
     });
 
-    return { map, highlight };
+    return { map, highlight, actualPosition };
 }
