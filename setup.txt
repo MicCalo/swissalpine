@@ -1,0 +1,4 @@
+extenal: https://calonder.synology.me/
+
+FritzBox Port Freigabe 443 -> 8016
+Synology reverse Proxy

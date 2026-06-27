@@ -3,13 +3,20 @@
     // Hover to view descriptions of existing attributes.
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
-    "configurations": [
-        
+    "configurations": [        
         {
             "name": "Server",
             "type": "debugpy",
             "request": "launch",
             "program": "server.py",
+            "console": "integratedTerminal"
+        },
+         {
+            "name": "test player",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "gpx_player.py",
+            "args":["data/t808746431_k78-78.2-km.gpx", "--url", "http://localhost:8017"],
             "console": "integratedTerminal"
         }
     ]
