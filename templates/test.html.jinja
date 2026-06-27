@@ -2,12 +2,11 @@
 <html>
     <head>
         <title>Test</title>
-        <link href="{{ url_for('static', path='/styles.css') }}" rel="stylesheet">
-
         <link id="favicon" rel="icon" type="image/x-icon" href="{{ url_for('static', path='/favicon.ico') }}">
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
             integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
             crossorigin=""/>
+        <link href="{{ url_for('static', path='/styles.css') }}" rel="stylesheet">
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
             integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
             crossorigin=""></script>
@@ -20,6 +19,7 @@
         <script src="https://cdn.jsdelivr.net/npm/split.js@1.6.5/dist/split.min.js"
             integrity="sha256-wyvSd/7ZjNigQDPU7vNyAdm1CIYYm0u00JnRM/6vFtw="
             crossorigin="anonymous"></script>
+        <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
     </head>
 
     <body>
@@ -30,14 +30,17 @@
                     <thead>
                         <tr>
                             <th>Posten</th>
-                            <th>km</th>
                             <th>Soll</th>
                             <th>Ist</th>
                             <th>&#916;</th><!--delta-->
-                            <th>+lkm</th>
                             <th>Dauer</th>
+                            <th>km</th>
                             <th>&#8593;</th><!-- up -->
                             <th>&#8595;</th><!-- down -->
+                            <th>&#916;km</th>
+                            <th>&#916;&#8593;</th>
+                            <th>&#916;&#8595;</th>
+                            <th>lkm</th>
                         </tr>
                     </thead>
                     <tbody id="tbody"></tbody>
@@ -52,13 +55,15 @@
                 segments: {{ track.segments_as_json | safe }},
                 gapPolys: [[1.0719747552984284,3.8950291039596086,14.364768273050313,-17.79284965889736],[1.0309165723755624,1.7226517479035495,10.11708013261488]],
                 targetParams: {
-                    base_speed: 11.73 / 3.6,
+                    name: "target",
+                    baseSpeed: 8.2 / 3.6,
                     onset:40,
-                    lambda:0.009,
+                    lambda:0.020,
                     floor: 0.55
                 },
                 actualParams: {
-                    base_speed: NaN,
+                    name: "actual",
+                    baseSpeed: NaN,
                     onset:NaN,
                     lambda:NaN,
                     floor: NaN

@@ -1,18 +1,38 @@
 import { initMap } from '/static/map-view.js';
 import { buildPlot, getPlot, getXScale, getYScale } from '/static/chart-view.js';
-import { getGradeAjustment } from '/static/model.js';
+import { getGradeAjustment, predict  } from '/static/model.js';
+import { toHHMM  } from '/static/utils.js';
 
 const COLOR = '#cc0000';
-const { points: trackPoints, segments: trackSegments, gapPolys } = window.RAW
+const { points: trackPoints, segments: trackSegments, gapPolys, targetParams } = window.RAW
 
-// Derive cumDist and ele on each segment
-let cumDist = 0;
+// Checkpoint list: named track points
+const checkPoints = trackPoints
+    .filter(p => p.name)
+    .map(p => ({
+        name:    p.name,
+        ele:     p.ele,
+        lat:     p.lat,
+        lon:     p.lon,
+        seg_idx: p.seg_idx
+    }));
+
+checkPoints.forEach((cp, i) => {
+    trackSegments[cp.seg_idx].checkpt_idx = i;
+});
+
+// Derive cumDist, ele, gradAdj ect. on each segment
 let cumLkm = 0;
+let cumDist = 0;
+let cumAscent = 0;
+let cumDescent = 0;
+
+let lastCp = null
+
 for (const seg of trackSegments) {
-    let segDistKm = seg.dist / 1000.0;
-    cumDist     += segDistKm;
+    
+    seg.grad = seg.grad / 1000
     seg.ele      = trackPoints[seg.end_idx].ele;
-    seg.cumDist  = cumDist;
     seg.totalAscent = 0
     seg.totalDescent = 0
     for (let i = seg.start_idx; i < seg.end_idx; i++) {
@@ -23,22 +43,34 @@ for (const seg of trackSegments) {
             seg.totalDescent -= delta;
         }
     }
-    let lkm = seg.totalAscent/100 + segDistKm
-    cumLkm += lkm;
-    seg.cumLkm = cumLkm;
-    seg.gradAdj = getGradeAjustment(seg.grad/100, gapPolys);
+    seg.gradAdj = getGradeAjustment(seg.grad, gapPolys);    
+
+    let segDistKm = seg.dist / 1000.0;
+    let segLkm = seg.totalAscent/100 + segDistKm
+    cumDist += segDistKm;
+    cumLkm += segLkm;
+    cumAscent += seg.totalAscent;
+    cumDescent += seg.totalDescent;
+
+    seg.cumDist = cumDist;
+    if (seg.checkpt_idx != null)
+    {
+        let cp = checkPoints[seg.checkpt_idx];
+        cp.cumDist = seg.checkpt_idx === 0 ? 0 : cumDist;
+        cp.cumLkm = seg.checkpt_idx === 0 ? 0 : cumLkm;
+        cp.cumAscent = seg.checkpt_idx === 0 ? 0 : cumAscent;
+        cp.cumDescent = seg.checkpt_idx === 0 ? 0 : cumDescent;
+        if (lastCp){
+            lastCp.dist = cp.cumDist - lastCp.cumDist;
+            lastCp.ascent = cp.cumAscent - lastCp.cumAscent;
+            lastCp.descent = cp.cumDescent - lastCp.cumDescent;
+        }
+        lastCp = cp;
+    }    
 }
 
-// Checkpoint list: named track points enriched with cumDist
-const checkPoints = trackPoints
-    .filter(p => p.name)
-    .map(p => ({
-        name:    p.name,
-        ele:     p.ele,
-        lat:     p.lat,
-        lon:     p.lon,
-        cumDist: trackSegments[p.seg_idx].cumDist,
-    }));
+predict(trackSegments, checkPoints, targetParams);
+
 
 // Map
 const { map, highlight } = initMap(trackPoints, checkPoints, COLOR);
@@ -99,9 +131,20 @@ map.on('mousemove', e => {
 const tbody = document.getElementById('tbody');
 for (const cp of checkPoints) {
     const tr = document.createElement('tr');
+    let next = cp.dist ? `${cp.dist.toFixed(1)} ${cp.ascent.toFixed(0)} ${cp.descent.toFixed(0)}` : '—';
     tr.innerHTML = `
         <td>${cp.name}</td>
+        <td>${toHHMM(cp.targetDuration)}</td>     <!-- target -->
+        <td>${toHHMM(cp.actualDuration)}</td>     <!-- actual -->
+        <td>—</td>     <!-- delta -->
+        <td>—</td>     <!-- delta -->
         <td>${cp.cumDist.toFixed(0)}</td>
+        <td>${cp.cumAscent.toFixed(0)}</td>     <!-- up -->
+        <td>${cp.cumDescent.toFixed(0)}</td>     <!-- down -->
+        <td>${cp.dist ? cp.dist.toFixed(1) : '-'}</td>     <!-- next -> -->
+        <td>${cp.ascent ? cp.ascent.toFixed(0) : '-'}</td>     <!-- next up-->
+        <td>${cp.descent ? cp.descent.toFixed(0) : '-'}</td>     <!-- next down -->
+        <td>${cp.cumLkm.toFixed(0)}</td>     <!-- lkm -->        
     `;
     tbody.appendChild(tr);
 }

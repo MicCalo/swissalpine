@@ -24,3 +24,22 @@ body         { display: flex; flex-direction: column; }
 .map-cp-label::before {
     display: none;
 }
+
+body{
+    font-family:'DM Mono', monospace;
+}
+
+th {
+    text-align: right; font-weight: 400;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 4px 8px;
+    border-bottom: 1px solid black; white-space: nowrap;
+}
+th:first-child { text-align: left; }
+
+td {
+    padding: 7px 8px;
+    text-align: right;
+}
+
+td:first-child { text-align: left; }

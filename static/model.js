@@ -1,28 +1,11 @@
-function getFatigueMultiplier(model, cumulativeLkm)
+function getFatigueMultiplier(params, cumulativeLkm)
 {
-    if (cumulativeLkm <= model.onset) return 1.0;
-    return model.floor + (1.0 - model.floor) * Math.exp(-model.lambda * (cumulativeLkm - model.onset));
+    if (cumulativeLkm <= params.onset) return 1.0;
+    return params.floor + (1.0 - params.floor) * Math.exp(-params.lambda * (cumulativeLkm - params.onset));
 }
 
-function poly(input, poly){
-    let result = poly[0];
-
-    let term = input;
-    result += term * poly[1];
-
-    term *= input;
-    result += term * poly[2];
-    if (poly.length == 3) return result;
-
-    term *= input;
-    result += term * poly[3];
-    if (poly.length == 4) return result;
-
-    term *= input;
-    result += term * poly[4];
-    if (poly.length == 5) return result;
-
-    throw "not supported";
+function poly(input, coeffs) {
+    return coeffs.reduceRight((acc, c) => acc * input + c, 0);
 }
 
 export function getGradeAjustment(gradient, gapPolys)
@@ -34,20 +17,28 @@ export function getGradeAjustment(gradient, gapPolys)
     return poly(gradient, gapPolys[1])
 }
 
-function predictedSpeed(model, seg, cumulativeLkm, baseSpeed)
+function predictedSpeed(params, seg, cumulativeLkm)
 {
-    //let gradeAdjustment = getGradeAjustment(seg.grad);
-    let fatigue = getFatigueMultiplier(model,  cumulativeLkm);
-    return baseSpeed * fatigue / gradeAdjustment;
+    let fatigue = getFatigueMultiplier(params,  cumulativeLkm);
+    return params.baseSpeed * fatigue / seg.gradAdj;
 }
 
-function predict(segments, model)
+export function predict(segments, checkPoints, params)
 {
-    let cumulativeGapKm = 0;
+    let cumulativeLkm = 0;
+    let cumulativeDuration = 0;
     for (const seg of segments)
     {
-        let segGapKm = seg.grade * seg.distance / 1000.0;
-        //let speed = PredictedSpeed(seg, cumulativeLkm, flatSpeed);
-        cumulativeGapKm += segGapKm;
+        let segLkm = seg.dist / 1000 + seg.totalAscent / 100;
+        let speed = predictedSpeed(params, seg, cumulativeLkm);
+        let duration = seg.dist / speed / 60;  // minutes
+        //seg[params.name + 'Duration'] = duration
+        cumulativeDuration += duration;
+        cumulativeLkm += segLkm;
+
+        if (seg.checkpt_idx != null)
+        {
+            checkPoints[seg.checkpt_idx][params.name+"Duration"] = cumulativeDuration
+        }
     }
 }

@@ -53,4 +53,4 @@ class Track:
     
     def _segments_as_json(self):
         for s in self.segments:
-            yield f"{{start_idx:{s.start_idx},end_idx:{s.end_idx},dist:{s.dist:.2f},grad:{(s.gradient*100):.2f}}}"
+            yield f"{{start_idx:{s.start_idx},end_idx:{s.end_idx},dist:{s.dist:.2f},grad:{(s.gradient * 1000):.2f}}}"
