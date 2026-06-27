@@ -21,7 +21,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-track = Track("t808746431_k78-78.2-km.gpx")
+track = Track("data/t808746431_k78-78.2-km.gpx")
 
 def find(c: Coord):
     (best_dist, best_id) = (float("inf"), None)
@@ -79,14 +79,12 @@ def log(request: Request, c: str):
         raise HTTPException(status_code=422, detail="lat and lon must be numbers")
     if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
         raise HTTPException(status_code=422, detail="lat/lon out of range")
-
-    coord = Coord(lat, lon)
-    best_id = find(coord)
-    with open("log.txt", "a") as f:
-        f.write(f"{safe_c.replace(',', ';')}\n")
-    return {"ok": True, "best_id": best_id}
+   
+    file = f"data/actual/log_{tokens[5]}_{time.date().isoformat()}.log"
+    with open(file, "a") as f:
+        f.write(f"{int(datetime.now().timestamp())};{';'.join(tokens[:-1])}\n")
+    return {"ok": True}
 
 
 if __name__ == "__main__":
-   # uvicorn.run(app, host="127.0.0.1", port=8016)
-   uvicorn.run(app, host="192.168.178.90", port=8016)
+   uvicorn.run(app, host="127.0.0.1", port=8016)

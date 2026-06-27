@@ -1,4 +1,0 @@
-trinDigg=?
-tegiaSut=?
-bargis=?
-tegiaGrond=?
