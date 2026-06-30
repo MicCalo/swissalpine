@@ -3,8 +3,9 @@ from data_model.coordinate import distance, Coord
 from data_model.track import Track
 import logging
 import re
-from datetime import datetime, timezone
-from fastapi import FastAPI, Request, HTTPException
+import os
+from datetime import datetime, timezone, date
+from fastapi import FastAPI, Request, HTTPException, Body
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import StreamingResponse
 from fastapi.templating import Jinja2Templates
@@ -16,7 +17,17 @@ from collections.abc import AsyncIterable, Iterable
 import asyncio
 from pydantic import BaseModel
 
+from uvicorn.logging import DefaultFormatter
 
+handler = logging.StreamHandler()
+handler.setFormatter(DefaultFormatter("%(levelprefix)s %(message)s"))
+
+logger = logging.getLogger("swissalpine")
+logger.addHandler(handler)
+logger.setLevel(logging.INFO)
+#logger.propagate = False
+
+logger.info("Start")
 
 
 limiter = Limiter(key_func=get_remote_address)
@@ -32,12 +43,49 @@ track = Track("data/t808746431_k78-78.2-km.gpx")
 latest_position: dict | None = None
 position_event = asyncio.Event()
 
+def read_actual_positions(start_time: datetime, track: Track) -> list:
+    result = []
+    min_ts = start_time.timestamp()
+    global last_pt_idx
+    for file_name in os.listdir("data/actual"):
+        if file_name.endswith(".log"):
+            date_str =file_name[:-4].split('_')[-1]
+            file_date = date.fromisoformat(date_str)
+            if file_date>=start_time.date():           
+                path = os.path.join("data/actual", file_name)
+                with open(path, 'r') as f:
+                    for line in f.readlines():
+                        tokens = line.split(';')
+                        gps_ts = int(tokens[4])
+                        if min_ts<=gps_ts:
+                            lat = float(tokens[1])
+                            lon = float(tokens[2])
+                            ele = float(tokens[3])
+                            bat = float(tokens[5])
+
+                            pt_idx, dist = track.find(Coord(lat, lon), last_pt_idx - 10, last_pt_idx + 500)
+                            entry = {'lat': lat, 'lon': lon,'ele':ele, 'bat': bat, 'ts':gps_ts}
+                            if (dist<100):
+                                entry['pt_idx'] = pt_idx
+                                last_pt_idx = pt_idx
+
+                            result.append(entry)
+    return result
+
+#start_time = datetime.fromisoformat("2026-07-18T05:00:00+02:00")
+start_time = datetime.fromisoformat("2026-06-30T15:18:42+02:00")
+last_pt_idx = 0
+
+actual = read_actual_positions(start_time, track)
+ 
+
+
 @app.get("/")
 def index(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="test.html.jinja",
-        context={"track": track}
+        context={"track": track, 'actual': actual, 'startTime': start_time }
     )
 
 @app.get("/track.points.csv")
@@ -56,14 +104,22 @@ def track_segments_csv():
         headers={"Content-Disposition": "inline; filename=track.segments.csv"}
     )
 
+@app.post("/start_override")
+def start_override(start_time_str: str = Body(..., embed=True)):
+    global start_time
+    start_time = datetime.fromisoformat(start_time_str)
+    logger.info(f"start-override {start_time}")
+    return {"ok": True, "start_time": start_time}
+
+ 
 @app.get("/log")
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 def log(request: Request, c: str):
     safe_c = re.sub(r'[^\x20-\x7E]', '', c)[:100]
-    logging.info(f"content={safe_c}")
+    logger.info(f"content={safe_c}")
 
     # 47.4924304,8.7412871,496.4000244140625,1782247587,70.0,mz
-
+    ts_now = int(datetime.now().timestamp())
     tokens = c.split(",")
     if len(tokens) != 6:
         raise HTTPException(status_code=422, detail="Expected 'lat,lon,alt,ts,bat,mz'")
@@ -74,13 +130,13 @@ def log(request: Request, c: str):
         ts = int(tokens[3])
         bat = int(tokens[4])
         time = datetime.fromtimestamp(ts)
-        print(f"lat={lat}, lon={lon}, ele={ele}, ts={ts} ({time}), bat={tokens[4]}, mz={tokens[5]}")
+        logger.info(f"lat={lat}, lon={lon}, ele={ele}, ts={ts} ({time}), bat={tokens[4]}, mz={tokens[5]} at server time {datetime.fromtimestamp(ts_now)}")
     except ValueError:
         raise HTTPException(status_code=422, detail="lat and lon must be numbers")
     if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
         raise HTTPException(status_code=422, detail="lat/lon out of range")
-    
-    pt_idx, dist = track.find(Coord(lat, lon))
+                              
+    pt_idx, dist = track.find(Coord(lat, lon), last_pt_idx - 100, last_pt_idx + 2000)
     global latest_position
     latest_position = {'lat': lat, 'lon': lon,'ele':ele, 'bat': bat, 'ts':ts}
     if (dist<100):
@@ -89,7 +145,7 @@ def log(request: Request, c: str):
    
     file = f"data/actual/log_{tokens[5]}_{time.date().isoformat()}.log"
     with open(file, "a") as f:
-        f.write(f"{int(datetime.now().timestamp())};{';'.join(tokens[:-1])}\n")
+        f.write(f"{ts_now};{';'.join(tokens[:-1])}\n")
     return {"ok": True}
 
 

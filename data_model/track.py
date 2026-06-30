@@ -30,9 +30,14 @@ class Track:
         #as last point of a segment is also first point of next segment, and rage is exclusive last, the very last point is not assigned
         self.points[-1].segment_idx = self.points[-2].segment_idx 
 
-    def find(self, c: Coord):
+    def find(self, c: Coord, min_idx:int=0, max_idx:int=float("inf")):
         (best_dist, best_id) = (float("inf"), None)
-        for i, pt in enumerate(self.points):
+        if min_idx<0:
+            min_idx = 0
+        if max_idx>len(self.points):
+            max_idx = len(self.points)
+        for i in range(min_idx, max_idx):
+            pt = self.points[i]
             dist = distance(c, pt.coord)
             if dist < best_dist:
                 best_dist = dist

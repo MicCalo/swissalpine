@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Swissalpine - Set Start Time</title>
+</head>
+<body>
+
+<h1>Set Start Time</h1>
+
+<p>Default scheduled start: 2026-07-18 05:00 (Europe/Zurich)</p>
+
+<h2>Set a specific time</h2>
+<form id="manualForm">
+  <label for="startTime">Start time:</label>
+  <input type="datetime-local" id="startTime" name="startTime" step="1" value="2026-07-18T05:00:00">
+  <button type="submit">Set Start Time</button>
+</form>
+
+<h2>Or just press now</h2>
+<button id="nowButton">Start Now</button>
+
+<p id="status"></p>
+
+<script>
+const ENDPOINT = "/start_override"; // adjust to your actual backend URL, e.g. "https://your-domain/api/start"
+const statusEl = document.getElementById("status");
+
+function postStartTime(d) { 
+  const off = -d.getTimezoneOffset();
+  const sign = off >= 0 ? '+' : '-';
+  const pad = n => String(Math.floor(Math.abs(n))).padStart(2,'0');
+  const isoString = `${d.toLocaleDateString('sv')}T${d.toLocaleTimeString('sv')}${sign}${pad(off/60)}:${pad(off%60)}`;
+
+  statusEl.textContent = "Sending...";
+  fetch(ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ start_time_str: isoString })
+  })
+    .then(res => {
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return res.json().catch(() => ({}));
+    })
+    .then(() => {
+      statusEl.textContent = "Start time set to: " + isoString;
+    })
+    .catch(err => {
+      statusEl.textContent = "Error: " + err.message;
+    });
+}
+
+document.getElementById("manualForm").addEventListener("submit", function (e) {
+  e.preventDefault();
+  const value = document.getElementById("startTime").value; // e.g. "2026-07-18T05:00:00"
+  if (!value) {
+    statusEl.textContent = "Please pick a time.";
+    return;
+  }
+  // Treat input as local time (Europe/Zurich on the device), convert to ISO with offset
+  
+  postStartTime(new Date(value));
+});
+
+document.getElementById("nowButton").addEventListener("click", function () {
+  // "Start Now"
+  postStartTime(new Date);
+});
+</script>
+
+</body>
+</html>
