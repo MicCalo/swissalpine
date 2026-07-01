@@ -4,7 +4,10 @@ import { getGradeAjustment, predict  } from '/static/model.js';
 import { toHHMM  } from '/static/utils.js';
 
 const COLOR = '#cc0000';
-const { points: trackPoints, segments: trackSegments, gapPolys, targetParams } = window.RAW
+const { points: trackPoints, segments: trackSegments, gapPolys, targetParams, actualPoints, startTime } = window.RAW
+
+const startTimeMinutes = startTime.getHours() * 60 + startTime.getMinutes()
+
 
 // Checkpoint list: named track points
 const checkPoints = trackPoints
@@ -29,8 +32,7 @@ let cumDescent = 0;
 
 let lastCp = null
 
-for (const seg of trackSegments) {
-    
+for (const seg of trackSegments) {    
     seg.grad = seg.grad / 1000
     seg.ele      = trackPoints[seg.end_idx].ele;
     seg.totalAscent = 0
@@ -73,7 +75,7 @@ predict(trackSegments, checkPoints, targetParams);
 
 
 // Map
-const { map, highlight, actualPosition } = initMap(trackPoints, checkPoints, COLOR);
+const { map, highlight, actualPosition, actualRoutePoly } = initMap(trackPoints, checkPoints, actualPoints, COLOR);
 
 // Chart
 let autoPan = true;
@@ -134,8 +136,8 @@ for (const cp of checkPoints) {
     let next = cp.dist ? `${cp.dist.toFixed(1)} ${cp.ascent.toFixed(0)} ${cp.descent.toFixed(0)}` : '—';
     tr.innerHTML = `
         <td>${cp.name}</td>
-        <td>${toHHMM(cp.targetDuration)}</td>     <!-- target -->
-        <td>${toHHMM(cp.actualDuration)}</td>     <!-- actual -->
+        <td>${toHHMM(cp.targetDuration + startTimeMinutes)}</td>     <!-- target -->
+        <td>${toHHMM(cp.actualDuration + startTimeMinutes)}</td>     <!-- actual -->
         <td>—</td>     <!-- delta -->
         <td>—</td>     <!-- delta -->
         <td>${cp.cumDist.toFixed(0)}</td>
@@ -154,7 +156,13 @@ const evtSource = new EventSource("/position");
 evtSource.addEventListener("posUpdate", (event) => {
     const data = JSON.parse(event.data)
     console.info("posUpdate: "+data.lat+"/"+data.lon+", ele: "+data.ele);
+
+    // update marker
     actualPosition.setLatLng([data.lat, data.lon]).addTo(map);
+
+    // add to list
+    actualPoints.push(data);
+    actualRoutePoly.addLatLng([data.lat, data.lon]);
 });
 
 // Layout — resizable split panels

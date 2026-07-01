@@ -1,9 +1,14 @@
-export function initMap(trackPoints, checkPoints, color) {
+export function initMap(trackPoints, checkPoints, actualPoints, color) {
     const map = L.map('map');
 
     const route = L.polyline(
         trackPoints.map(p => [p.lat, p.lon]),
         { color, opacity: 0.6, weight: 5 }
+    ).addTo(map);
+
+    const actualRoutePoly = L.polyline(
+        actualPoints.map(p => [p.lat, p.lon]),
+        {color: 'blue'}
     ).addTo(map);
 
     for (const cp of checkPoints) {
@@ -29,5 +34,10 @@ export function initMap(trackPoints, checkPoints, color) {
         radius: 20, color: 'blue', fillColor: 'blue', fillOpacity: 0.2, weight: 2
     });
 
-    return { map, highlight, actualPosition };
+    if (actualPoints.length > 0){
+        const last = actualPoints[actualPoints.length - 1]
+        actualPosition.setLatLng([last.lat, last.lon]).addTo(map);
+    }
+
+    return { map, highlight, actualPosition, actualRoutePoly };
 }

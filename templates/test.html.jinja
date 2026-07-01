@@ -53,6 +53,8 @@
             window.RAW = {
                 points:   {{ track.points_as_json | safe }},
                 segments: {{ track.segments_as_json | safe }},
+                actualPoints: {{ actual_points_json | safe }},
+                startTime: new Date("{{ start_time }}"),
                 gapPolys: [[1.0719747552984284,3.8950291039596086,14.364768273050313,-17.79284965889736],[1.0309165723755624,1.7226517479035495,10.11708013261488]],
                 targetParams: {
                     name: "target",

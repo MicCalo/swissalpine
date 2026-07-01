@@ -4,6 +4,7 @@ from data_model.track import Track
 import logging
 import re
 import os
+import json
 from datetime import datetime, timezone, date
 from fastapi import FastAPI, Request, HTTPException, Body
 from fastapi.staticfiles import StaticFiles
@@ -65,7 +66,7 @@ def read_actual_positions(start_time: datetime, track: Track) -> list:
 
                             pt_idx, dist = track.find(Coord(lat, lon), last_pt_idx - 10, last_pt_idx + 500)
                             entry = {'lat': lat, 'lon': lon,'ele':ele, 'bat': bat, 'ts':gps_ts}
-                            if (dist<100):
+                            if (dist < 100):
                                 entry['pt_idx'] = pt_idx
                                 last_pt_idx = pt_idx
 
@@ -73,19 +74,17 @@ def read_actual_positions(start_time: datetime, track: Track) -> list:
     return result
 
 #start_time = datetime.fromisoformat("2026-07-18T05:00:00+02:00")
-start_time = datetime.fromisoformat("2026-06-30T15:18:42+02:00")
+start_time = datetime.fromisoformat("2026-07-01T09:00:42+02:00")
 last_pt_idx = 0
 
-actual = read_actual_positions(start_time, track)
+actual_points = read_actual_positions(start_time, track)
  
-
-
 @app.get("/")
 def index(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="test.html.jinja",
-        context={"track": track, 'actual': actual, 'startTime': start_time }
+        context={"track": track, 'actual_points_json': json.dumps(actual_points), 'start_time': start_time.isoformat() }
     )
 
 @app.get("/track.points.csv")
@@ -107,8 +106,10 @@ def track_segments_csv():
 @app.post("/start_override")
 def start_override(start_time_str: str = Body(..., embed=True)):
     global start_time
+    global actual_points
     start_time = datetime.fromisoformat(start_time_str)
     logger.info(f"start-override {start_time}")
+    actual_points = read_actual_positions(start_time, track)
     return {"ok": True, "start_time": start_time}
 
  
@@ -142,6 +143,7 @@ def log(request: Request, c: str):
     if (dist<100):
         latest_position['pt_idx'] = pt_idx
     position_event.set()
+    actual_points.append(latest_position)
    
     file = f"data/actual/log_{tokens[5]}_{time.date().isoformat()}.log"
     with open(file, "a") as f:
