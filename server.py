@@ -74,7 +74,7 @@ def read_actual_positions(start_time: datetime, track: Track) -> list:
     return result
 
 #start_time = datetime.fromisoformat("2026-07-18T05:00:00+02:00")
-start_time = datetime.fromisoformat("2026-07-01T09:00:42+02:00")
+start_time = datetime.fromisoformat("2026-07-01T10:35:42+02:00")
 last_pt_idx = 0
 
 actual_points = read_actual_positions(start_time, track)

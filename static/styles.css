@@ -43,3 +43,30 @@ td {
 }
 
 td:first-child { text-align: left; }
+
+.map-position-control {
+    background: white;
+    padding: 6px 10px;
+    border-radius: 4px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+}
+
+.map-position-control button {
+    font-family: inherit;
+    font-size: inherit;
+    padding: 4px 8px;
+    cursor: pointer;
+}
+
+.map-position-control label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+}

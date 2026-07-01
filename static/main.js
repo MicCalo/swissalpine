@@ -75,14 +75,13 @@ predict(trackSegments, checkPoints, targetParams);
 
 
 // Map
-const { map, highlight, actualPosition, actualRoutePoly } = initMap(trackPoints, checkPoints, actualPoints, COLOR);
+const { map, highlight, actualPosition, actualRoutePoly, isAutoPanActualPositionEnabled, isAutoPanChartPositionEnabled } = initMap(trackPoints, checkPoints, actualPoints, COLOR);
 
 // Chart
 let autoPan = true;
 let doneIdx = -1; // last completed segment index, driven by actual position pings
 let panTimer = null;
 const PAN_DEBOUNCE_MS = 400;
-const autoPanEnabled = document.getElementById('autopan-toggle');
 
 // Nearest track point to a lat/lon, used both to drive the map crosshair
 // from mouse hover and to figure out how far along the route we are.
@@ -106,7 +105,7 @@ function onPlotInput() {
 
         // Debounce: only pan once the hover has settled on a spot for a bit,
         // so a quick pass-through over the chart doesn't yank the map around.
-        if (autoPan && autoPanEnabled.checked) {
+        if (autoPan && isAutoPanChartPositionEnabled()) {
             panTimer = setTimeout(() => {
                 if (!map.getBounds().contains([pt.lat, pt.lon])) {
                     map.panTo([pt.lat, pt.lon], { animate: true, duration: 2.0 });
@@ -175,10 +174,12 @@ const evtSource = new EventSource("/position");
 
 evtSource.addEventListener("posUpdate", (event) => {
     const data = JSON.parse(event.data)
-    console.info("posUpdate: "+data.lat+"/"+data.lon+", ele: "+data.ele);
-
     // update marker
     actualPosition.setLatLng([data.lat, data.lon]).addTo(map);
+
+    if (isAutoPanActualPositionEnabled()) {
+        map.panTo([data.lat, data.lon], { animate: true });
+    }
 
     // add to list
     actualPoints.push(data);

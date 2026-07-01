@@ -39,5 +39,50 @@ export function initMap(trackPoints, checkPoints, actualPoints, color) {
         actualPosition.setLatLng([last.lat, last.lon]).addTo(map);
     }
 
-    return { map, highlight, actualPosition, actualRoutePoly };
+    // Bottom-of-map control: center/zoom to the live position, plus a
+    // checkbox to keep the map continuously centered as pings come in.
+    let autoPanActualPositionCheckbox;
+    let autoPanChartPositionCheckbox;
+    const PositionControl = L.Control.extend({
+        options: { position: 'bottomleft' },
+        onAdd: function () {
+            const container = L.DomUtil.create('div', 'map-position-control');
+            L.DomEvent.disableClickPropagation(container);
+            L.DomEvent.disableScrollPropagation(container);
+
+            const btn = L.DomUtil.create('button', '', container);
+            btn.type = 'button';
+            btn.textContent = '\u{1F4CD} Center on position';
+            btn.addEventListener('click', () => {
+                if (map.hasLayer(actualPosition)) {
+                    map.setView(actualPosition.getLatLng(), Math.max(map.getZoom(), 15), { animate: true });
+                }
+            });
+
+            const label1 = L.DomUtil.create('label', '', container);
+            autoPanActualPositionCheckbox = L.DomUtil.create('input', '', label1);
+            autoPanActualPositionCheckbox.type = 'checkbox';
+            label1.appendChild(document.createTextNode(' Auto-pan on position'));
+            autoPanActualPositionCheckbox.addEventListener('change', () => {
+                if (autoPanActualPositionCheckbox.checked) autoPanChartPositionCheckbox.checked = false;
+            });
+
+            const label2 = L.DomUtil.create('label', '', container);
+            autoPanChartPositionCheckbox = L.DomUtil.create('input', '', label2);
+            autoPanChartPositionCheckbox.type = 'checkbox';
+            label2.appendChild(document.createTextNode(' Auto-pan on height profile'));
+            autoPanChartPositionCheckbox.addEventListener('change', () => {
+                if (autoPanChartPositionCheckbox.checked) autoPanActualPositionCheckbox.checked = false;
+            });
+
+            return container;
+        }
+    });
+    map.addControl(new PositionControl());
+
+    return {
+        map, highlight, actualPosition, actualRoutePoly,
+        isAutoPanActualPositionEnabled: () => autoPanActualPositionCheckbox.checked,
+        isAutoPanChartPositionEnabled: () => autoPanChartPositionCheckbox.checked
+    };
 }
