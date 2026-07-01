@@ -1,6 +1,8 @@
 import { initMap } from '/static/map-view.js';
 import { buildPlot, getPlot, getXScale, getYScale } from '/static/chart-view.js';
 import { getGradeAjustment, predict  } from '/static/model.js';
+import { initializeSegments, initializeCheckPoints } from '/static/init-utils.js';
+import { Checkpoint } from '/static/checkpoint.js';
 import { toHHMM  } from '/static/utils.js';
 
 const COLOR = '#cc0000';
@@ -8,68 +10,9 @@ const { points: trackPoints, segments: trackSegments, gapPolys, targetParams, ac
 
 const startTimeMinutes = startTime.getHours() * 60 + startTime.getMinutes()
 
-
-// Checkpoint list: named track points
-const checkPoints = trackPoints
-    .filter(p => p.name)
-    .map(p => ({
-        name:    p.name,
-        ele:     p.ele,
-        lat:     p.lat,
-        lon:     p.lon,
-        seg_idx: p.seg_idx
-    }));
-
-checkPoints.forEach((cp, i) => {
-    trackSegments[cp.seg_idx].checkpt_idx = i;
-});
-
 // Derive cumDist, ele, gradAdj ect. on each segment
-let cumLkm = 0;
-let cumDist = 0;
-let cumAscent = 0;
-let cumDescent = 0;
-
-let lastCp = null
-
-for (const seg of trackSegments) {    
-    seg.grad = seg.grad / 1000
-    seg.ele      = trackPoints[seg.end_idx].ele;
-    seg.totalAscent = 0
-    seg.totalDescent = 0
-    for (let i = seg.start_idx; i < seg.end_idx; i++) {
-        const delta = trackPoints[i + 1].ele - trackPoints[i].ele;
-        if (delta > 0) {
-            seg.totalAscent += delta;
-        } else {
-            seg.totalDescent -= delta;
-        }
-    }
-    seg.gradAdj = getGradeAjustment(seg.grad, gapPolys);    
-
-    let segDistKm = seg.dist / 1000.0;
-    let segLkm = seg.totalAscent/100 + segDistKm
-    cumDist += segDistKm;
-    cumLkm += segLkm;
-    cumAscent += seg.totalAscent;
-    cumDescent += seg.totalDescent;
-
-    seg.cumDist = cumDist;
-    if (seg.checkpt_idx != null)
-    {
-        let cp = checkPoints[seg.checkpt_idx];
-        cp.cumDist = seg.checkpt_idx === 0 ? 0 : cumDist;
-        cp.cumLkm = seg.checkpt_idx === 0 ? 0 : cumLkm;
-        cp.cumAscent = seg.checkpt_idx === 0 ? 0 : cumAscent;
-        cp.cumDescent = seg.checkpt_idx === 0 ? 0 : cumDescent;
-        if (lastCp){
-            lastCp.dist = cp.cumDist - lastCp.cumDist;
-            lastCp.ascent = cp.cumAscent - lastCp.cumAscent;
-            lastCp.descent = cp.cumDescent - lastCp.cumDescent;
-        }
-        lastCp = cp;
-    }    
-}
+initializeSegments(trackSegments, trackPoints, gapPolys);
+const checkPoints = initializeCheckPoints(trackSegments, trackPoints);
 
 predict(trackSegments, checkPoints, targetParams);
 

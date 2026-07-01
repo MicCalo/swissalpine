@@ -36,9 +36,9 @@ export function predict(segments, checkPoints, params)
         cumulativeDuration += duration;
         cumulativeLkm += segLkm;
 
-        if (seg.checkpt_idx != null)
+        if (seg.checkptIdx != null)
         {
-            checkPoints[seg.checkpt_idx][params.name+"Duration"] = cumulativeDuration
+            checkPoints[seg.checkptIdx][params.name+"Duration"] = cumulativeDuration
         }
     }
 }
