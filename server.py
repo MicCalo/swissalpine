@@ -83,7 +83,7 @@ actual_points = read_actual_positions(start_time, track)
 def index(request: Request):
     return templates.TemplateResponse(
         request=request,
-        name="test.html.jinja",
+        name="main.html.jinja",
         context={"track": track, 'actual_points_json': json.dumps(actual_points), 'start_time': start_time.isoformat() }
     )
 
