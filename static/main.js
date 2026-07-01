@@ -79,6 +79,18 @@ const { map, highlight, actualPosition, actualRoutePoly } = initMap(trackPoints,
 
 // Chart
 let autoPan = true;
+let doneIdx = -1; // last completed segment index, driven by actual position pings
+
+// Nearest track point to a lat/lon, used both to drive the map crosshair
+// from mouse hover and to figure out how far along the route we are.
+function nearestTrackPoint(lat, lon, maxMeters = 300) {
+    let best = null, bestDist = Infinity;
+    for (const p of trackPoints) {
+        const m = map.distance([lat, lon], [p.lat, p.lon]);
+        if (m < bestDist) { bestDist = m; best = p; }
+    }
+    return (best && bestDist < maxMeters) ? best : null;
+}
 
 function onPlotInput() {
     const d = getPlot().value;
@@ -95,7 +107,7 @@ function onPlotInput() {
 }
 
 function rebuildPlot() {
-    buildPlot(trackSegments, checkPoints, COLOR, onPlotInput);
+    buildPlot(trackSegments, checkPoints, COLOR, onPlotInput, doneIdx);
 }
 
 rebuildPlot();
@@ -107,16 +119,12 @@ map.on('mousemove', e => {
     const yScale = getYScale();
     const rect   = plot.getBoundingClientRect();
 
-    let best = null, bestDist = Infinity;
-    for (const p of trackPoints) {
-        const m = map.distance(e.latlng, [p.lat, p.lon]);
-        if (m < bestDist) { bestDist = m; best = p; }
-    }
+    const best = nearestTrackPoint(e.latlng.lat, e.latlng.lng);
 
     // Default to x=0 (outside plot frame) → clears crosshair
     let x = rect.left;
     let y = rect.top + rect.height / 2;
-    if (best && bestDist < 300) {
+    if (best) {
         const seg = trackSegments[best.seg_idx];
         x = rect.left + xScale.apply(seg.cumDist);
         y = rect.top  + yScale.apply(seg.ele);
@@ -163,6 +171,13 @@ evtSource.addEventListener("posUpdate", (event) => {
     // add to list
     actualPoints.push(data);
     actualRoutePoly.addLatLng([data.lat, data.lon]);
+
+    // advance the "done" portion of the elevation profile
+    const nearest = nearestTrackPoint(data.lat, data.lon);
+    if (nearest) {
+        doneIdx = Math.max(doneIdx, nearest.seg_idx);
+        rebuildPlot();
+    }
 });
 
 // Layout — resizable split panels
