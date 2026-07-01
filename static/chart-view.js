@@ -1,14 +1,6 @@
 let _plot, _xScale, _yScale;
 
-const DONE_COLOR = 'blue'; // matches actualRoutePoly on the map
-
-// Convenience: derive a segment index from a cumDist (x) value, for callers
-// that prefer to track progress by distance instead of index.
-export function segIdxForCumDist(trackSegments, cumDist) {
-    if (cumDist == null) return -1;
-    const idx = trackSegments.findIndex(s => s.cumDist >= cumDist);
-    return idx === -1 ? trackSegments.length - 1 : idx;
-}
+const DONE_COLOR = 'blue'; 
 
 // doneIdx: index of the last completed segment in trackSegments (-1 = nothing done yet).
 export function buildPlot(trackSegments, checkPoints, color, onInput, doneIdx = -1) {

@@ -92,6 +92,7 @@ function nearestTrackPoint(lat, lon, maxMeters = 300) {
     return (best && bestDist < maxMeters) ? best : null;
 }
 
+// Chart → Map
 function onPlotInput() {
     const d = getPlot().value;
     if (d) {
@@ -105,12 +106,6 @@ function onPlotInput() {
         highlight.remove();
     }
 }
-
-function rebuildPlot() {
-    buildPlot(trackSegments, checkPoints, COLOR, onPlotInput, doneIdx);
-}
-
-rebuildPlot();
 
 // Map → Chart: drive crosshair via synthetic pointer events
 map.on('mousemove', e => {
@@ -136,6 +131,12 @@ map.on('mousemove', e => {
     }));
     autoPan = true;
 });
+
+function rebuildPlot() {
+    buildPlot(trackSegments, checkPoints, COLOR, onPlotInput, doneIdx);
+}
+
+rebuildPlot();
 
 // Table
 const tbody = document.getElementById('tbody');
