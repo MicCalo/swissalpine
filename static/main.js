@@ -80,6 +80,9 @@ const { map, highlight, actualPosition, actualRoutePoly } = initMap(trackPoints,
 // Chart
 let autoPan = true;
 let doneIdx = -1; // last completed segment index, driven by actual position pings
+let panTimer = null;
+const PAN_DEBOUNCE_MS = 400;
+const autoPanEnabled = document.getElementById('autopan-toggle');
 
 // Nearest track point to a lat/lon, used both to drive the map crosshair
 // from mouse hover and to figure out how far along the route we are.
@@ -95,12 +98,20 @@ function nearestTrackPoint(lat, lon, maxMeters = 300) {
 // Chart → Map
 function onPlotInput() {
     const d = getPlot().value;
+    clearTimeout(panTimer);
     if (d) {
         const centerIdx = Math.trunc((d.start_idx + d.end_idx) / 2);
         const pt = trackPoints[centerIdx];
         highlight.setLatLng([pt.lat, pt.lon]).addTo(map);
-        if (autoPan && !map.getBounds().contains([pt.lat, pt.lon])) {
-            map.panTo([pt.lat, pt.lon], { animate: true, duration: 2.0 });
+
+        // Debounce: only pan once the hover has settled on a spot for a bit,
+        // so a quick pass-through over the chart doesn't yank the map around.
+        if (autoPan && autoPanEnabled.checked) {
+            panTimer = setTimeout(() => {
+                if (!map.getBounds().contains([pt.lat, pt.lon])) {
+                    map.panTo([pt.lat, pt.lon], { animate: true, duration: 2.0 });
+                }
+            }, PAN_DEBOUNCE_MS);
         }
     } else {
         highlight.remove();
@@ -173,10 +184,12 @@ evtSource.addEventListener("posUpdate", (event) => {
     actualPoints.push(data);
     actualRoutePoly.addLatLng([data.lat, data.lon]);
 
-    // advance the "done" portion of the elevation profile
+    // advance the "done" portion of the elevation profile — only rebuild
+    // when it actually changes, so the plot (and any active hover/crosshair
+    // state on it) isn't torn down and recreated on every single ping
     const nearest = nearestTrackPoint(data.lat, data.lon);
-    if (nearest) {
-        doneIdx = Math.max(doneIdx, nearest.seg_idx);
+    if (nearest && nearest.seg_idx > doneIdx) {
+        doneIdx = nearest.seg_idx;
         rebuildPlot();
     }
 });
