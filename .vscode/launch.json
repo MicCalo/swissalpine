@@ -16,7 +16,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "gpx_player.py",
-            "args":["data/t808746431_k78-78.2-km.gpx", "--url", "http://localhost:8017"],
+            "args":["data/t808746431_k78-78.2-km.gpx", "--url", "http://192.168.178.90:8016"],
             "console": "integratedTerminal"
         }
     ]
