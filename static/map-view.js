@@ -12,6 +12,8 @@ export function initMap(trackPoints, checkPoints, actualPoints, color) {
     ).addTo(map);
 
     for (const cp of checkPoints) {
+        if (cp.hidden) { continue; }
+        
         L.circleMarker([cp.lat, cp.lon], {
             radius: 6, color, fillColor: color, fillOpacity: 0.7, weight: 2
         })

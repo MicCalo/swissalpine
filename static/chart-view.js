@@ -10,13 +10,13 @@ export function buildPlot(trackSegments, checkPoints, color, onInput, doneIdx = 
     const clampedIdx = Math.max(-1, Math.min(doneIdx, trackSegments.length - 1));
     const doneSegments      = trackSegments.slice(0, clampedIdx + 1);
     const remainingSegments = trackSegments.slice(Math.max(clampedIdx, 0)); // shares boundary point, no gap
-
+    const normalCheckPoints = checkPoints.filter(cp => !cp.hidden);
     _plot = Plot.plot({
         width:  div.clientWidth,
         height: div.clientHeight,
         marks: [
-            Plot.dot(checkPoints, { x: 'cumDist', y: 'ele', fill: color, r: 4 }),
-            Plot.text(checkPoints, { x: 'cumDist', y: 'ele', text: 'name', dy: -20, fontSize: 10, textAnchor: 'middle' }),
+            Plot.dot(normalCheckPoints, { x: 'cumDist', y: 'ele', fill: color, r: 4 }),
+            Plot.text(normalCheckPoints, { x: 'cumDist', y: 'ele', text: 'name', dy: -20, fontSize: 10, textAnchor: 'middle' }),
 
             Plot.areaY(doneSegments, { x: 'cumDist', y: 'ele', y2: d3.min(trackSegments, d => d.ele), fill: '#abf9' }),
             Plot.areaY(remainingSegments, { x: 'cumDist', y: 'ele', y2: d3.min(trackSegments, d => d.ele), fill: '#8884' }),

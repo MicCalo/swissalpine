@@ -58,8 +58,16 @@ export function initializeCheckPoints(trackSegments, trackPoints){
     }));
     */
 
+    let lastCp = null;
+    for(const cp of checkPoints){
+        if (lastCp){
+            cp.lastCheckpoint = lastCp;
+        }
+        lastCp = cp;
+    }
+
     // Make sure we have about 2 Check-pts per lkm
-    introduceHiddenCheckpoints(checkPoints, trackSegments);
+    introduceHiddenCheckpoints(checkPoints, trackSegments, trackPoints);
 
     checkPoints.forEach((cp, i) => {
         trackSegments[cp.segIdx].checkptIdx = i;
@@ -85,12 +93,45 @@ export function initializeCheckPoints(trackSegments, trackPoints){
     return checkPoints;
 }
 
-function introduceHiddenCheckpoints(checkPoints, trackSegments){
-    let lastCp = null;
-    for(const cp in checkPoints){
-        if (lastCp){
+// Binary search: trackSegments is sorted ascending by cumLkm.
+function findSegment(trackSegments, lkm){
+    let lo = 0;
+    let hi = trackSegments.length - 1;
+    while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (trackSegments[mid].cumLkm < lkm) {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    if (lo > 0 && Math.abs(trackSegments[lo - 1].cumLkm - lkm) <= Math.abs(trackSegments[lo].cumLkm - lkm)) {
+        return trackSegments[lo - 1];
+    }
+    return trackSegments[lo];
+}
 
+function introduceHiddenCheckpoints(checkPoints, trackSegments, trackPoints){
+    let lastCp = null;
+   
+    for(const cp of checkPoints){
+        if (lastCp){
+            let divisions = Math.round((cp.lkm / 0.5) / 2) * 2;
+            let divLkm = cp.lkm / divisions;
+            let pos = lastCp.cumLkm + divLkm;
+            for (let i = 0; i < divisions-1; i++){
+                let seg = findSegment(trackSegments, pos);
+                let hiddenCp = new Checkpoint(trackPoints[seg.end_idx], trackSegments, true);
+                checkPoints.push(hiddenCp);
+                pos += divLkm;                
+            }
         }
         lastCp = cp;
+    }
+
+    checkPoints.sort((a, b) => a.cumLkm - b.cumLkm);
+
+    for(const cp of checkPoints){
+        console.info(`Checkpoint: ${cp.name} ${cp.cumLkm.toFixed(2)} lkm, ${cp.cumDist.toFixed(2)} km, ${cp.cumAscent.toFixed(0)} m up, ${cp.cumDescent.toFixed(0)} m down, hidden: ${cp.hidden}`);
     }
 }

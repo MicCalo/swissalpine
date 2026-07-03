@@ -94,6 +94,8 @@ rebuildPlot();
 // Table
 const tbody = document.getElementById('tbody');
 for (const cp of checkPoints) {
+    if (cp.hidden) { continue; }
+    
     const tr = document.createElement('tr');
     let next = cp.dist ? `${cp.dist.toFixed(1)} ${cp.ascent.toFixed(0)} ${cp.descent.toFixed(0)}` : '—';
     tr.innerHTML = `
