@@ -6,24 +6,46 @@ Mimics the GPSLogger "Custom URL" format used by server.py:
     GET <url>/log?c=lat,lon,alt,ts,bat,mz
 
 Behavior:
-  1. Lingers at the start point for --linger seconds, sending periodic pings.
-  2. Replays the track at a fixed speed (--speed, m/s), interpolating between
-     GPX trackpoints by distance so movement looks continuous regardless of
-     how sparsely the original points are spaced.
+  1. Lingers at the start point for --linger simulated seconds.
+  2. Replays the track, interpolating between GPX trackpoints by distance so
+     movement looks continuous regardless of how sparsely the original
+     points are spaced.
   3. Adds Gaussian positional noise (--noise, meters) to every emitted point.
 
+The simulated race clock and the real wall-clock delay between HTTP sends
+are independent:
+  - --speed (m/s) and --interval (simulated seconds between GPS fixes)
+    control the *ts* field and how far each ping advances along the route —
+    this is what should reflect a real, plausible running/hiking pace, since
+    it's what the app's pace/forecast calculations will see.
+  - --burst-delay / --replay-delay control how fast *we* deliver those pings
+    in real time — this is the actual fast-forward knob, and can be as fast
+    as your server can handle without changing the simulated pace at all.
+  - --burst-until (km) switches from --burst-delay to the slower
+    --replay-delay once that distance is reached, so you can get a big
+    chunk of history almost instantly, then watch the remainder unfold at a
+    more observable (but still accelerated) rate.
+
+--start-time anchors the simulated ts values (default: now). Set this to
+match the server's configured race start time (see startTime in
+templates/main.html.jinja) for a clean test run. If it doesn't match, the
+app's own start-time sanity check (see main.js) should kick in and correct
+itself from the 2nd checkpoint crossing — deliberately mismatching this is
+also a reasonable way to test that feature specifically.
+
 Usage:
-  python gpx_player.py track.gpx --url https://calonder.synology.me or http://localhost:8017 \
-      --speed 2.5 --linger 60 --interval 5 --noise 4
+  python gpx_player.py track.gpx --url http://localhost:8017 \
+      --speed 2.0 --interval 10 --start-time 2026-07-15T05:00:00 \
+      --burst-until 50 --burst-delay 0.02 --replay-delay 0.5
 """
 import argparse
 import math
 import random
-import sys
 import time
 import urllib.request
 import urllib.parse
 import xml.etree.ElementTree as ET
+from datetime import datetime
 
 GPX_NS = {"gpx": "http://www.topografix.com/GPX/1/1"}
 EARTH_R = 6371000.0  # meters
@@ -104,8 +126,16 @@ def add_noise(lat, lon, noise_m):
     return lat + dlat, lon + dlon
 
 
-def send_log(base_url, lat, lon, ele, bat, mz, timeout=5):
-    c = f"{lat:.7f},{lon:.7f},{ele:.1f},{int(time.time())},{bat},{mz}"
+def parse_start_time(s):
+    """Accepts an ISO8601 string (naive = local time) and returns epoch seconds."""
+    dt = datetime.fromisoformat(s)
+    if dt.tzinfo is None:
+        dt = dt.astimezone()  # interpret naive datetimes as local time
+    return dt.timestamp()
+
+
+def send_log(base_url, lat, lon, ele, ts, bat, mz, timeout=5):
+    c = f"{lat:.7f},{lon:.7f},{ele:.1f},{int(ts)},{bat},{mz}"
     url = f"{base_url.rstrip('/')}/log?{urllib.parse.urlencode({'c': c})}"
     try:
         with urllib.request.urlopen(url, timeout=timeout) as resp:
@@ -119,10 +149,24 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("gpx_file", help="Path to GPX track file")
     ap.add_argument("--url", required=True, help="Base URL of the server, e.g. http://localhost:8017")
-    ap.add_argument("--speed", type=float, default=19.0, help="Replay speed in m/s (default 2.5 ~ 9 km/h jogging pace)")
-    ap.add_argument("--interval", type=float, default=1.1, help="Seconds between pings (default 5)")
-    ap.add_argument("--linger", type=float, default=10.0, help="Seconds to linger at start before moving (default 10)")
-    ap.add_argument("--noise", type=float, default=2.0, help="Gaussian noise stddev in meters (default 4)")
+    ap.add_argument("--speed", type=float, default=2.0,
+                    help="Simulated pace in m/s — drives the ts field, should be realistic (default 2.0)")
+    ap.add_argument("--interval", type=float, default=10.0,
+                    help="Simulated seconds between GPS fixes — drives the ts field (default 10)")
+    ap.add_argument("--start-time", type=parse_start_time, default=None,
+                    help="ISO8601 simulated race start, e.g. 2026-07-15T05:00:00. "
+                         "Match the server's configured startTime for a clean run, "
+                         "or mismatch it deliberately to test the start-time sanity check. "
+                         "Default: now.")
+    ap.add_argument("--burst-until", type=float, default=None,
+                    help="Distance in km up to which pings are sent almost instantly (default: disabled)")
+    ap.add_argument("--burst-delay", type=float, default=0.02,
+                    help="Real seconds between sends while below --burst-until (default 0.02)")
+    ap.add_argument("--replay-delay", type=float, default=0.3,
+                    help="Real seconds between sends once past --burst-until, or throughout if unset (default 0.3)")
+    ap.add_argument("--linger", type=float, default=10.0,
+                    help="Simulated seconds to linger at start before moving (default 10)")
+    ap.add_argument("--noise", type=float, default=2.0, help="Gaussian noise stddev in meters (default 2)")
     ap.add_argument("--bat", type=int, default=85, help="Fake battery percentage to report (default 85)")
     ap.add_argument("--mz", default="sim", help="Value for the 'mz' field (default 'sim')")
     ap.add_argument("--dry-run", action="store_true", help="Print points instead of sending HTTP requests")
@@ -134,35 +178,50 @@ def main():
     print(f"Loaded {len(points)} trackpoints, total length {total_dist/1000:.2f} km")
 
     start_lat, start_lon, start_ele = points[0]
+    sim_start_ts = args.start_time if args.start_time is not None else time.time()
+    burst_until_m = args.burst_until * 1000.0 if args.burst_until is not None else None
 
-    def emit(lat, lon, ele, label):
+    def real_delay(traveled_m):
+        if burst_until_m is not None and traveled_m < burst_until_m:
+            return args.burst_delay
+        return args.replay_delay
+
+    def emit(lat, lon, ele, ts, traveled_m, label):
         nlat, nlon = add_noise(lat, lon, args.noise)
-        print(f"[{label}] lat={nlat:.6f} lon={nlon:.6f} ele={ele:.1f}")
-        if args.dry_run:
-            return
-        send_log(args.url, nlat, nlon, ele, args.bat, args.mz)
+        print(f"[{label}] lat={nlat:.6f} lon={nlon:.6f} ele={ele:.1f} "
+              f"sim_ts={datetime.fromtimestamp(ts).isoformat(timespec='seconds')}")
+        if not args.dry_run:
+            send_log(args.url, nlat, nlon, ele, ts, args.bat, args.mz)
+        time.sleep(real_delay(traveled_m))
 
-    # 1. Linger at start
-    linger_end = time.time() + args.linger
-    print(f"\n--- Lingering at start for {args.linger:.0f}s ---")
-    while time.time() < linger_end:
-        emit(start_lat, start_lon, start_ele, "linger")
-        time.sleep(args.interval)
+    # 1. Linger at start — simulated clock still advances, but real delay
+    # stays at burst pace since pre-race waiting isn't interesting to watch.
+    sim_ts = sim_start_ts
+    linger_end_sim = sim_ts + args.linger
+    print(f"\n--- Lingering at start for {args.linger:.0f} simulated s ---")
+    while sim_ts < linger_end_sim:
+        emit(start_lat, start_lon, start_ele, sim_ts, 0.0, "linger")
+        sim_ts += args.interval
 
-    # 2. Replay along the track at fixed speed
-    print(f"\n--- Replaying at {args.speed:.2f} m/s, ping every {args.interval:.0f}s ---")
+    # 2. Replay along the track. Distance and ts both advance by
+    # speed * interval per simulated step, independent of real delay.
+    print(f"\n--- Replaying at {args.speed:.2f} m/s simulated pace, "
+          f"fix every {args.interval:.0f} simulated s ---")
+    if burst_until_m is not None:
+        print(f"    burst mode below {args.burst_until:.1f} km "
+              f"({args.burst_delay:.3f}s/send), then {args.replay_delay:.3f}s/send after")
     traveled = 0.0
-    step = args.speed * args.interval
+    sim_step = args.speed * args.interval
     while traveled < total_dist:
         lat, lon, ele = interpolate_at_distance(points, cum_dist, traveled)
         pct = 100 * traveled / total_dist
-        emit(lat, lon, ele, f"replay {pct:5.1f}%")
-        traveled += step
-        time.sleep(args.interval)
+        emit(lat, lon, ele, sim_ts, traveled, f"replay {pct:5.1f}%")
+        traveled += sim_step
+        sim_ts += args.interval
 
     # final point exactly at the end
     lat, lon, ele = points[-1]
-    emit(lat, lon, ele, "finish")
+    emit(lat, lon, ele, sim_ts, total_dist, "finish")
     print("\nDone.")
 
 
