@@ -97,6 +97,7 @@ function rebuildPlot() {
 const tbody = document.getElementById('tbody');
 function rebuildTable() {
     tbody.innerHTML = '';
+    let prevReached = true; // checkpoint 0 (Start) is always reached
     for (const cp of checkPoints) {
         if (cp.hidden) { continue; }
 
@@ -107,11 +108,16 @@ function rebuildTable() {
         const deltaStr = delta != null ? `${delta >= 0 ? '+' : ''}${delta.toFixed(0)}` : '—';
 
         const tr = document.createElement('tr');
+        const guessClass = reached ? 'cp-actual' : 'cp-forecast';
+        // First forecasted row right after the last confirmed crossing —
+        // the "you are here" boundary between what's happened and what's next.
+        if (!reached && prevReached) tr.classList.add('cp-current');
+        prevReached = reached;
         tr.innerHTML = `
             <td>${cp.name}</td>
             <td>${toHHMM(cp.targetDuration + startTimeMinutes)}</td>     <!-- target -->
-            <td>${bestGuessStr}</td>     <!-- actual, or forecast (~) if not reached yet -->
-            <td>${deltaStr}</td>     <!-- delta vs target, minutes -->
+            <td class="${guessClass}">${bestGuessStr}</td>     <!-- actual, or forecast (~) if not reached yet -->
+            <td class="${guessClass}">${deltaStr}</td>     <!-- delta vs target, minutes -->
             <td>—</td>     <!-- Dauer -->
             <td>${cp.cumDist.toFixed(0)}</td>
             <td>${cp.cumAscent.toFixed(0)}</td>     <!-- up -->

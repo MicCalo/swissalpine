@@ -44,6 +44,19 @@ td {
 
 td:first-child { text-align: left; }
 
+.cp-actual {
+    font-weight: 500;
+}
+
+.cp-forecast {
+    color: #888;
+    font-weight: 300;
+}
+
+.cp-current td {
+    border-top: 2px solid black;
+}
+
 .map-position-control {
     background: white;
     padding: 6px 10px;
