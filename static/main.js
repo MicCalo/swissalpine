@@ -94,6 +94,37 @@ function rebuildPlot() {
     buildPlot(trackSegments, checkPoints, COLOR, onPlotInput, doneIdx);
 }
 
+const tbody = document.getElementById('tbody');
+function rebuildTable() {
+    tbody.innerHTML = '';
+    for (const cp of checkPoints) {
+        if (cp.hidden) { continue; }
+
+        const reached = cp.actualDuration != null;
+        const bestGuess = reached ? cp.actualDuration : cp.forecastDuration; // confirmed if reached, else current forecast
+        const bestGuessStr = bestGuess != null ? (reached ? '' : '~') + toHHMM(bestGuess + startTimeMinutes) : '—';
+        const delta = bestGuess != null ? bestGuess - cp.targetDuration : null;
+        const deltaStr = delta != null ? `${delta >= 0 ? '+' : ''}${delta.toFixed(0)}` : '—';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${cp.name}</td>
+            <td>${toHHMM(cp.targetDuration + startTimeMinutes)}</td>     <!-- target -->
+            <td>${bestGuessStr}</td>     <!-- actual, or forecast (~) if not reached yet -->
+            <td>${deltaStr}</td>     <!-- delta vs target, minutes -->
+            <td>—</td>     <!-- Dauer -->
+            <td>${cp.cumDist.toFixed(0)}</td>
+            <td>${cp.cumAscent.toFixed(0)}</td>     <!-- up -->
+            <td>${cp.cumDescent.toFixed(0)}</td>     <!-- down -->
+            <td>${cp.dist ? cp.dist.toFixed(1) : '-'}</td>     <!-- next -> -->
+            <td>${cp.ascent ? cp.ascent.toFixed(0) : '-'}</td>     <!-- next up-->
+            <td>${cp.descent ? cp.descent.toFixed(0) : '-'}</td>     <!-- next down -->
+            <td>${cp.cumLkm.toFixed(0)}</td>     <!-- lkm -->
+        `;
+        tbody.appendChild(tr);
+    }
+}
+
 // --- Live GPS → route-progress trace, driving both the "done" chart fill
 // and interpolated checkpoint crossing times (cp.actualDuration) ---
 let lastMatchIdx = 0;    // windowed-search anchor, see nearestPointWindowed
@@ -205,6 +236,8 @@ function refitForecast() {
         // left as a no-op rather than silently reverting to target or
         // extrapolating phase 2's baseSpeed indefinitely.
     }
+
+    rebuildTable();
 }
 
 // Fill in actualDuration for every checkpoint whose cumLkm falls between
@@ -259,28 +292,7 @@ for (const p of actualPoints) {
 rebuildPlot();
 
 // Table
-const tbody = document.getElementById('tbody');
-for (const cp of checkPoints) {
-    if (cp.hidden) { continue; }
-    
-    const tr = document.createElement('tr');
-    let next = cp.dist ? `${cp.dist.toFixed(1)} ${cp.ascent.toFixed(0)} ${cp.descent.toFixed(0)}` : '—';
-    tr.innerHTML = `
-        <td>${cp.name}</td>
-        <td>${toHHMM(cp.targetDuration + startTimeMinutes)}</td>     <!-- target -->
-        <td>${toHHMM(cp.actualDuration + startTimeMinutes)}</td>     <!-- actual -->
-        <td>—</td>     <!-- delta -->
-        <td>—</td>     <!-- delta -->
-        <td>${cp.cumDist.toFixed(0)}</td>
-        <td>${cp.cumAscent.toFixed(0)}</td>     <!-- up -->
-        <td>${cp.cumDescent.toFixed(0)}</td>     <!-- down -->
-        <td>${cp.dist ? cp.dist.toFixed(1) : '-'}</td>     <!-- next -> -->
-        <td>${cp.ascent ? cp.ascent.toFixed(0) : '-'}</td>     <!-- next up-->
-        <td>${cp.descent ? cp.descent.toFixed(0) : '-'}</td>     <!-- next down -->
-        <td>${cp.cumLkm.toFixed(0)}</td>     <!-- lkm -->
-    `;
-    tbody.appendChild(tr);
-}
+rebuildTable();
 
 const evtSource = new EventSource("/position");
 
