@@ -89,6 +89,115 @@ function rebuildPlot() {
     buildPlot(trackSegments, checkPoints, COLOR, onPlotInput, doneIdx);
 }
 
+// --- Live GPS → route-progress trace, driving both the "done" chart fill
+// and interpolated checkpoint crossing times (cp.actualDuration) ---
+let lastMatchIdx = 0;    // windowed-search anchor, see nearestPointWindowed
+let maxCumLkm = 0;       // monotonic clamp, absorbs backward GPS jitter
+let nextCpIdx = 1;       // checkpoint 0 (Start) is defined as t=0 below, not GPS-interpolated
+const progressTrace = []; // [{ts, cumLkm}], real GPS-derived points only — no synthetic anchor
+
+// Elapsed-time reference, in epoch seconds. Mutable: see checkStartTimeSanity —
+// if this is way off (e.g. wrong date/timezone during dev testing), it gets
+// back-calculated from the 2nd checkpoint crossing instead of trusted blindly.
+let effectiveStartTs = startTime.getTime() / 1000;
+let startTimeSanityChecked = false;
+const STARTTIME_SANITY_THRESHOLD_MIN = 120; // far beyond plausible pace variance over ~0.5 lkm
+
+checkPoints[0].actualTs = effectiveStartTs;
+checkPoints[0].actualDuration = 0;
+
+// Windowed nearest-point search for sequential GPS pings: only look near
+// the last accepted match (100 pts back / 1000 forward) instead of the
+// whole route, so a switchback — or start/finish proximity on a loop
+// course — can't snap the match to the wrong part of the route.
+function nearestPointWindowed(lat, lon, maxMeters = 300) {
+    const lo = Math.max(0, lastMatchIdx - 100);
+    const hi = Math.min(trackPoints.length - 1, lastMatchIdx + 1000);
+    let best = null, bestDist = Infinity, bestIdx = -1;
+    for (let i = lo; i <= hi; i++) {
+        const p = trackPoints[i];
+        const m = map.distance([lat, lon], [p.lat, p.lon]);
+        if (m < bestDist) { bestDist = m; best = p; bestIdx = i; }
+    }
+    if (best && bestDist < maxMeters) {
+        lastMatchIdx = bestIdx;
+        return best;
+    }
+    return null;
+}
+
+// If the 2nd checkpoint's elapsed time is wildly off from plan, the most
+// likely explanation this early in the race is a wrong start-time
+// reference (wrong date/timezone, dev config left over from testing),
+// not the runner's actual pace already being that far off. Back-calculate
+// a corrected reference from this checkpoint's raw timestamp + its target
+// duration, and refresh checkpoint 0 (which is defined relative to it,
+// not independently observed) to match.
+function checkStartTimeSanity(cp) {
+    if (startTimeSanityChecked) return;
+    startTimeSanityChecked = true;
+    if (cp.targetDuration == null) return; // nothing to compare against
+
+    const diff = cp.actualDuration - cp.targetDuration;
+    if (Math.abs(diff) <= STARTTIME_SANITY_THRESHOLD_MIN) return; // plausible pace variance — leave it
+
+    console.warn(`Start time looks ~${(diff / 60).toFixed(1)}h off ` +
+        `(2nd checkpoint actual ${cp.actualDuration.toFixed(1)} min vs target ${cp.targetDuration.toFixed(1)} min). ` +
+        `Back-calculating a corrected start time.`);
+
+    effectiveStartTs = cp.actualTs - cp.targetDuration * 60;
+    checkPoints[0].actualTs = effectiveStartTs;
+    checkPoints[0].actualDuration = 0;
+    cp.actualDuration = (cp.actualTs - effectiveStartTs) / 60; // ≈ cp.targetDuration, by construction
+}
+
+// Fill in actualDuration for every checkpoint whose cumLkm falls between
+// the previous and new trace point, via linear interpolation of ts. A
+// while-loop (not if) so a coarse ping interval spanning multiple
+// checkpoints backfills all of them from the same bracketing pair.
+function interpolateCheckpointCrossings(prevPoint, newPoint) {
+    while (nextCpIdx < checkPoints.length && checkPoints[nextCpIdx].cumLkm <= newPoint.cumLkm) {
+        const idx = nextCpIdx;
+        const cp = checkPoints[idx];
+        const span = newPoint.cumLkm - prevPoint.cumLkm;
+        const frac = span > 0 ? (cp.cumLkm - prevPoint.cumLkm) / span : 0;
+        cp.actualTs = prevPoint.ts + frac * (newPoint.ts - prevPoint.ts); // purely real-GPS-derived
+        cp.actualDuration = (cp.actualTs - effectiveStartTs) / 60; // minutes
+        nextCpIdx++;
+
+        if (cp.hidden){
+            console.debug("Crossed checkpoint at lkm " + cp.cumLkm.toFixed(2) + " (hidden)");
+        }
+        else{
+            console.info("Crossed checkpoint '" + cp.name + "' at lkm " + cp.cumLkm.toFixed(2) + " (visible)");
+        }
+
+        if (idx === 1) checkStartTimeSanity(cp);
+    }
+}
+
+// Feed one GPS fix (historical replay or a live ping) through the
+// pipeline. Returns the matched track point, or null if it fell outside
+// the window/radius (that ping is simply skipped, not treated as an error).
+function recordProgress(ts, lat, lon) {
+    const nearest = nearestPointWindowed(lat, lon);
+    if (!nearest) return null;
+    maxCumLkm = Math.max(maxCumLkm, trackSegments[nearest.seg_idx].cumLkm);
+    const point = { ts, cumLkm: maxCumLkm };
+    const prev = progressTrace[progressTrace.length - 1]; // undefined on the very first real ping
+    progressTrace.push(point);
+    if (prev) interpolateCheckpointCrossings(prev, point);
+    return nearest;
+}
+
+// Backfill from any positions already logged before this page loaded
+// (e.g. after a refresh mid-race), so actualDuration and doneIdx reflect
+// reality immediately rather than only from the next live ping onward.
+for (const p of actualPoints) {
+    const nearest = recordProgress(p.ts, p.lat, p.lon);
+    if (nearest && nearest.seg_idx > doneIdx) doneIdx = nearest.seg_idx;
+}
+
 rebuildPlot();
 
 // Table
@@ -132,8 +241,10 @@ evtSource.addEventListener("posUpdate", (event) => {
 
     // advance the "done" portion of the elevation profile — only rebuild
     // when it actually changes, so the plot (and any active hover/crosshair
-    // state on it) isn't torn down and recreated on every single ping
-    const nearest = nearestTrackPoint(data.lat, data.lon);
+    // state on it) isn't torn down and recreated on every single ping.
+    // This also feeds the route-progress trace used to interpolate
+    // checkpoint crossing times (see recordProgress above).
+    const nearest = recordProgress(data.ts, data.lat, data.lon);
     if (nearest && nearest.seg_idx > doneIdx) {
         doneIdx = nearest.seg_idx;
         rebuildPlot();
