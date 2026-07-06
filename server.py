@@ -114,7 +114,7 @@ def start_override(start_time_str: str = Body(..., embed=True)):
 
  
 @app.get("/log")
-@limiter.limit("60/minute")
+#@limiter.limit("60/minute")
 def log(request: Request, c: str):
     safe_c = re.sub(r'[^\x20-\x7E]', '', c)[:100]
     logger.info(f"content={safe_c}")
@@ -162,4 +162,5 @@ async def position() -> AsyncIterable[ServerSentEvent]:
         yield ServerSentEvent(data=latest_position, event='posUpdate', id=str(i))
 
 if __name__ == "__main__":
-   uvicorn.run(app, host="127.0.0.1", port=8016)
+    uvicorn.run(app, host="192.168.178.90", port=8016)
+  # uvicorn.run(app, host="127.0.0.1", port=8016)
