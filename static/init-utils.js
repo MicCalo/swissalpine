@@ -45,19 +45,7 @@ export function initializeCheckPoints(trackSegments, trackPoints){
     let checkPoints = trackPoints
         .filter(p => p.name)
         .map(p => (new Checkpoint(p, trackSegments, false)));
-    /*
-        {
-        name:    p.name,
-        ele:     p.ele,
-        lat:     p.lat,
-        lon:     p.lon,
-        seg_idx: p.seg_idx,
-        hidden: false,
-        cumDist: null,
-        cumLkm: null
-    }));
-    */
-
+   
     let lastCp = null;
     for(const cp of checkPoints){
         if (lastCp){
@@ -72,24 +60,7 @@ export function initializeCheckPoints(trackSegments, trackPoints){
     checkPoints.forEach((cp, i) => {
         trackSegments[cp.segIdx].checkptIdx = i;
     });
-    /*
-    for (const seg of trackSegments) { 
-        if (seg.checkpt_idx != null)
-        {
-            let cp = checkPoints[seg.checkpt_idx];
-            cp.cumDist = seg.checkpt_idx === 0 ? 0 : cumDist;
-            cp.cumLkm = seg.checkpt_idx === 0 ? 0 : cumLkm;
-            cp.cumAscent = seg.checkpt_idx === 0 ? 0 : cumAscent;
-            cp.cumDescent = seg.checkpt_idx === 0 ? 0 : cumDescent;
-            if (lastCp){
-                lastCp.dist = cp.cumDist - lastCp.cumDist;
-                lastCp.ascent = cp.cumAscent - lastCp.cumAscent;
-                lastCp.descent = cp.cumDescent - lastCp.cumDescent;
-            }
-            lastCp = cp;
-        }    
-    }
-    */
+
     return checkPoints;
 }
 
@@ -130,8 +101,4 @@ function introduceHiddenCheckpoints(checkPoints, trackSegments, trackPoints){
     }
 
     checkPoints.sort((a, b) => a.cumLkm - b.cumLkm);
-
-    for(const cp of checkPoints){
-        console.info(`Checkpoint: ${cp.name} ${cp.cumLkm.toFixed(2)} lkm, ${cp.cumDist.toFixed(2)} km, ${cp.cumAscent.toFixed(0)} m up, ${cp.cumDescent.toFixed(0)} m down, hidden: ${cp.hidden}`);
-    }
 }

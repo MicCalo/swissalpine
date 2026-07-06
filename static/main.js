@@ -6,7 +6,7 @@ import { Checkpoint } from '/static/checkpoint.js';
 import { toHHMM  } from '/static/utils.js';
 
 const COLOR = '#cc0000';
-const { points: trackPoints, segments: trackSegments, gapPolys, targetParams, actualPoints, startTime } = window.RAW
+const { points: trackPoints, segments: trackSegments, gapPolys, targetParams, forecastParams, actualPoints, startTime } = window.RAW
 
 const startTimeMinutes = startTime.getHours() * 60 + startTime.getMinutes()
 
@@ -15,6 +15,11 @@ initializeSegments(trackSegments, trackPoints, gapPolys);
 const checkPoints = initializeCheckPoints(trackSegments, trackPoints);
 
 predict(trackSegments, checkPoints, targetParams);
+
+// Forecast starts out identical to plan; refitForecast() (below) adjusts
+// it as real checkpoint crossings come in.
+Object.assign(forecastParams, targetParams, { name: 'forecast' });
+predict(trackSegments, checkPoints, forecastParams);
 
 
 // Map
@@ -151,11 +156,63 @@ function checkStartTimeSanity(cp) {
     cp.actualDuration = (cp.actualTs - effectiveStartTs) / 60; // ≈ cp.targetDuration, by construction
 }
 
+// --- Forecast fitting: a three-phase re-fit of forecastParams driven by
+// checkpoint crossings so far.
+//   Phase 1 (< 30 lkm): too little data to trust anything but a flat
+//     offset — "if I'm 5 min behind, assume everything ahead shifts by 5 min."
+//   Phase 2 (30–60 lkm): a single global baseSpeed scalar is identifiable
+//     and sufficient; fit it in closed form (duration ∝ 1/baseSpeed).
+//   Phase 3 (≥ 60 lkm): comfortably past the fatigue onset (40 lkm), so
+//     there's finally a real curve to fit onset/lambda against. Not
+//     implemented yet — left as a deliberate no-op below.
+const PHASE1_END_LKM = 30;
+const PHASE2_END_LKM = 60; // picked so onset=40lkm sits inside this range, not at its edge
+const OFFSET_WINDOW = 5;   // rolling window (in checkpoints) for the phase-1 offset
+
+function refitForecast() {
+    const lastIdx = nextCpIdx - 1; // most recently crossed checkpoint
+    if (lastIdx < 1) return;       // nothing but the start line crossed yet
+    const currentLkm = checkPoints[lastIdx].cumLkm;
+
+    if (currentLkm < PHASE1_END_LKM) {
+        // Flat offset from a short rolling window of recent checkpoints,
+        // so one noisy crossing (aid station queue, a bad GPS ping)
+        // doesn't whipsaw the whole remaining forecast.
+        const from = Math.max(1, lastIdx - OFFSET_WINDOW + 1);
+        let sumDiff = 0, n = 0;
+        for (let i = from; i <= lastIdx; i++) {
+            sumDiff += checkPoints[i].actualDuration - checkPoints[i].targetDuration;
+            n++;
+        }
+        const offset = sumDiff / n;
+        for (const cp of checkPoints) cp.forecastDuration = cp.targetDuration + offset;
+
+    } else if (currentLkm < PHASE2_END_LKM) {
+        // Closed-form baseSpeed scaling: duration is inversely proportional
+        // to baseSpeed, so the ratio of summed actual-vs-target *interval*
+        // durations directly gives the multiplier — no optimizer needed.
+        let sumActual = 0, sumTarget = 0;
+        for (let i = 1; i <= lastIdx; i++) {
+            sumActual += checkPoints[i].actualDuration - checkPoints[i - 1].actualDuration;
+            sumTarget += checkPoints[i].targetDuration - checkPoints[i - 1].targetDuration;
+        }
+        const k = sumTarget > 0 ? sumActual / sumTarget : 1;
+        Object.assign(forecastParams, targetParams, { name: 'forecast', baseSpeed: targetParams.baseSpeed / k });
+        predict(trackSegments, checkPoints, forecastParams);
+
+    } else {
+        // Phase 3 (onset/lambda refit) isn't implemented yet — deliberately
+        // left as a no-op rather than silently reverting to target or
+        // extrapolating phase 2's baseSpeed indefinitely.
+    }
+}
+
 // Fill in actualDuration for every checkpoint whose cumLkm falls between
 // the previous and new trace point, via linear interpolation of ts. A
 // while-loop (not if) so a coarse ping interval spanning multiple
 // checkpoints backfills all of them from the same bracketing pair.
 function interpolateCheckpointCrossings(prevPoint, newPoint) {
+    const before = nextCpIdx;
     while (nextCpIdx < checkPoints.length && checkPoints[nextCpIdx].cumLkm <= newPoint.cumLkm) {
         const idx = nextCpIdx;
         const cp = checkPoints[idx];
@@ -174,6 +231,7 @@ function interpolateCheckpointCrossings(prevPoint, newPoint) {
 
         if (idx === 1) checkStartTimeSanity(cp);
     }
+    if (nextCpIdx > before) refitForecast();
 }
 
 // Feed one GPS fix (historical replay or a live ping) through the
