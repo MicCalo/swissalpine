@@ -226,10 +226,10 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("gpx_file", help="Path to GPX track file")
     ap.add_argument("--url", required=True, help="Base URL of the server, e.g. http://localhost:8017")
-    ap.add_argument("--speed", type=float, default=2.0,
+    ap.add_argument("--speed", type=float, default=8.2 / 3.6,
                     help="Flat-ground base pace in m/s (baseSpeed) — actual pace is this "
                          "adjusted by grade and fatigue, same as the app's model (default 2.0)")
-    ap.add_argument("--interval", type=float, default=10.0,
+    ap.add_argument("--interval", type=float, default=120.0,
                     help="Simulated seconds between GPS fixes — drives the ts field (default 10)")
     ap.add_argument("--start-time", type=parse_start_time, default=None,
                     help="ISO8601 simulated race start, e.g. 2026-07-15T05:00:00. "
