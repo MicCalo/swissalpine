@@ -69,6 +69,7 @@ GAP_DESCENT = [1.0309165723755624, 1.7226517479035495, 10.11708013261488]
 FATIGUE_ONSET = 40.0   # lkm
 FATIGUE_LAMBDA = 0.020
 FATIGUE_FLOOR = 0.55
+MIN_GRAD_ADJ = 0.3  # numerical safety net against extreme/noisy raw-GPX grades
 
 
 def parse_gpx(path):
@@ -169,38 +170,72 @@ def fatigue_multiplier(cum_lkm):
     return FATIGUE_FLOOR + (1.0 - FATIGUE_FLOOR) * math.exp(-FATIGUE_LAMBDA * (cum_lkm - FATIGUE_ONSET))
 
 
-def local_grade(points, cum_dist, total_dist, traveled_m, window_m=50.0):
-    """Net elevation gradient (fraction, e.g. 0.1 = 10%) over a short lookahead
-    window from the current position — used to pick the grade for the
-    upcoming step, avoiding noisy point-to-point deltas in the raw GPX."""
-    lo = max(0.0, traveled_m)
-    hi = min(total_dist, traveled_m + window_m)
-    if hi <= lo:
+def local_grade(ele_here, ele_next, sub_dist_m):
+    """Net gradient (fraction, e.g. 0.1 = 10%) of one raw point-to-point
+    sub-segment."""
+    if sub_dist_m <= 0:
         return 0.0
-    _, _, ele_lo = interpolate_at_distance(points, cum_dist, lo)
-    _, _, ele_hi = interpolate_at_distance(points, cum_dist, hi)
-    return (ele_hi - ele_lo) / (hi - lo)
+    return (ele_next - ele_here) / sub_dist_m
 
 
-def ascent_between(points, cum_dist, lo_m, hi_m):
-    """Sum of positive elevation deltas between lo_m and hi_m, walking the
-    underlying raw GPX points — mirrors totalAscent accumulation in
-    static/init-utils.js closely enough for simulation purposes."""
-    if hi_m <= lo_m:
-        return 0.0
-    lo_idx = bisect.bisect_left(cum_dist, lo_m)
-    hi_idx = bisect.bisect_right(cum_dist, hi_m)
-    ascent = 0.0
-    prev_ele = interpolate_at_distance(points, cum_dist, lo_m)[2]
-    for i in range(lo_idx, hi_idx):
-        ele = points[i][2]
-        if ele > prev_ele:
-            ascent += ele - prev_ele
-        prev_ele = ele
-    hi_ele = interpolate_at_distance(points, cum_dist, hi_m)[2]
-    if hi_ele > prev_ele:
-        ascent += hi_ele - prev_ele
-    return ascent
+def advance_by_time(points, cum_dist, total_dist, pos_m, cum_ascent_m, base_speed, interval_s):
+    """Walk forward along the raw GPX points, consuming exactly interval_s
+    seconds of simulated time. Each individual raw point-to-point
+    sub-segment gets its own grade-and-fatigue-adjusted speed — rather than
+    picking one speed for a whole lookahead window — so undulating terrain
+    within a single ping-to-ping gap is integrated correctly instead of
+    averaged before the (nonlinear) GAP polynomial sees it. This also
+    sidesteps the chicken-and-egg problem of sizing a step from an assumed
+    speed: we accumulate time directly against the route's own existing
+    point spacing, so no step distance needs to be guessed up front.
+
+    Returns (new_pos_m, new_cum_ascent_m, first_grade, first_speed) — the
+    grade/speed of the first sub-segment consumed are returned purely for
+    the status line, reflecting the physics actually used right at the
+    ping's starting point.
+    """
+    remaining = interval_s
+    pos = pos_m
+    cum_ascent = cum_ascent_m
+    idx = bisect.bisect_right(cum_dist, pos)  # index of the next raw point ahead of pos
+    first_grade, first_speed = None, None
+
+    while remaining > 0 and pos < total_dist and idx < len(points):
+        next_dist = cum_dist[idx]
+        sub_dist = next_dist - pos
+        if sub_dist <= 0:
+            idx += 1
+            continue
+
+        ele_here = interpolate_at_distance(points, cum_dist, pos)[2]
+        ele_next = points[idx][2]
+        grade = local_grade(ele_here, ele_next, sub_dist)
+        grad_adj = max(grade_adjustment(grade), MIN_GRAD_ADJ)
+        cum_lkm = pos / 1000.0 + cum_ascent / 100.0
+        fatigue = fatigue_multiplier(cum_lkm)
+        speed = base_speed * fatigue / grad_adj
+        if first_grade is None:
+            first_grade, first_speed = grade, speed
+        sub_time = sub_dist / speed
+
+        if sub_time <= remaining:
+            # fully cross this raw sub-segment
+            if ele_next > ele_here:
+                cum_ascent += ele_next - ele_here
+            pos = next_dist
+            remaining -= sub_time
+            idx += 1
+        else:
+            # interval_s worth of time ends partway through this sub-segment
+            frac = remaining / sub_time
+            pos += frac * sub_dist
+            if ele_next > ele_here:
+                cum_ascent += frac * (ele_next - ele_here)
+            remaining = 0
+
+    if first_grade is None:  # interval_s == 0, or already at the end
+        first_grade, first_speed = 0.0, base_speed
+    return pos, cum_ascent, first_grade, first_speed
 
 
 def parse_start_time(s):
@@ -281,9 +316,10 @@ def main():
         emit(start_lat, start_lon, start_ele, sim_ts, 0.0, "linger")
         sim_ts += args.interval
 
-    # 2. Replay along the track. Each tick's speed comes from GAP grade
-    # adjustment (via a short lookahead) and the current fatigue multiplier
-    # (via cumulative lkm tracked as we go) — same formula as model.js.
+    # 2. Replay along the track. Each ping consumes exactly --interval
+    # seconds of simulated time, integrated sub-segment by sub-segment over
+    # the raw GPX points (see advance_by_time) — not a single speed applied
+    # over a guessed step distance.
     print(f"\n--- Replaying with baseSpeed={args.speed:.2f} m/s, "
           f"onset={FATIGUE_ONSET:.0f}lkm, lambda={FATIGUE_LAMBDA:.3f}, floor={FATIGUE_FLOOR:.2f}, "
           f"fix every {args.interval:.0f} simulated s ---")
@@ -292,24 +328,15 @@ def main():
               f"({args.burst_delay:.3f}s/send), then {args.replay_delay:.3f}s/send after")
     traveled = 0.0
     cum_ascent_m = 0.0
-    cum_lkm = 0.0
-    MIN_GRAD_ADJ = 0.3  # numerical safety net against extreme/noisy raw-GPX grades
     while traveled < total_dist:
         lat, lon, ele = interpolate_at_distance(points, cum_dist, traveled)
-        grade = local_grade(points, cum_dist, total_dist, traveled)
-        grad_adj = max(grade_adjustment(grade), MIN_GRAD_ADJ)
-        fatigue = fatigue_multiplier(cum_lkm)
-        speed = args.speed * fatigue / grad_adj
+        traveled, cum_ascent_m, grade, speed = advance_by_time(
+            points, cum_dist, total_dist, traveled, cum_ascent_m, args.speed, args.interval)
+        fatigue = fatigue_multiplier(traveled / 1000.0 + cum_ascent_m / 100.0)
 
         pct = 100 * traveled / total_dist
         emit(lat, lon, ele, sim_ts, traveled,
              f"replay {pct:5.1f}% grade={grade*100:5.1f}% fatigue={fatigue:.2f} spd={speed:.2f}m/s")
-
-        step_m = speed * args.interval
-        new_traveled = min(traveled + step_m, total_dist)
-        cum_ascent_m += ascent_between(points, cum_dist, traveled, new_traveled)
-        traveled = new_traveled
-        cum_lkm = traveled / 1000.0 + cum_ascent_m / 100.0
         sim_ts += args.interval
 
     # final point exactly at the end
