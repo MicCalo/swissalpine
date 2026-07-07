@@ -344,7 +344,7 @@ def main():
                          "Default: now.")
     ap.add_argument("--burst-until", type=float, default=None,
                     help="Distance in km up to which pings are sent almost instantly (default: disabled)")
-    ap.add_argument("--burst-delay", type=float, default=0.02,
+    ap.add_argument("--burst-delay", type=float, default=0.0,
                     help="Real seconds between sends while below --burst-until (default 0.02)")
     ap.add_argument("--replay-delay", type=float, default=0.3,
                     help="Real seconds between sends once past --burst-until, or throughout if unset (default 0.3)")
