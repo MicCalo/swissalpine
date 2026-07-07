@@ -169,14 +169,34 @@ def smooth_elevations(points, cum_dist, window_m=GRADE_SMOOTHING_WINDOW_M):
     This mirrors (approximately) the rolling-median smoothing the real
     TerrainSegmenter applies before grading, and is intentionally a
     separate profile from the one actually sent in each ping — the sent
-    elevation should still look like realistic noisy GPS data."""
+    elevation should still look like realistic noisy GPS data.
+
+    Near the start/finish, the window would otherwise be truncated to only
+    one side (no terrain exists before 0 or after the total distance),
+    which biases the median away from the true local terrain right at the
+    boundary. Mirror-padding fills the missing side by reflecting the
+    nearby in-range data back across the boundary, rather than leaving the
+    window one-sided — the standard approach for edge handling in moving
+    filters."""
     eles = [p[2] for p in points]
+    total = cum_dist[-1]
     half = window_m / 2.0
     smoothed = []
     for i, d in enumerate(cum_dist):
-        lo_idx = bisect.bisect_left(cum_dist, d - half)
-        hi_idx = bisect.bisect_right(cum_dist, d + half)
-        window_eles = eles[lo_idx:hi_idx]
+        lo, hi = d - half, d + half
+        lo_idx = bisect.bisect_left(cum_dist, max(lo, 0.0))
+        hi_idx = bisect.bisect_right(cum_dist, min(hi, total))
+        window_eles = list(eles[lo_idx:hi_idx])
+
+        if lo < 0:
+            # missing [lo, 0) reflected from (0, -lo]
+            pad_hi_idx = bisect.bisect_right(cum_dist, -lo)
+            window_eles.extend(eles[0:pad_hi_idx])
+        if hi > total:
+            # missing (total, hi] reflected from [total-(hi-total), total)
+            pad_lo_idx = bisect.bisect_left(cum_dist, 2 * total - hi)
+            window_eles.extend(eles[pad_lo_idx:])
+
         smoothed.append(statistics.median(window_eles) if window_eles else eles[i])
     return smoothed
 

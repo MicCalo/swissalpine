@@ -103,7 +103,7 @@ function rebuildTable() {
 
         const reached = cp.actualDuration != null;
         const bestGuess = reached ? cp.actualDuration : cp.forecastDuration; // confirmed if reached, else current forecast
-        const bestGuessStr = bestGuess != null ? (reached ? '' : '~') + toHHMM(bestGuess + startTimeMinutes) : '—';
+        const bestGuessStr = bestGuess != null ? (reached ? '' : '~') + toHHMM(bestGuess + effectiveStartTimeMinutes) : '—';
         const delta = bestGuess != null ? bestGuess - cp.targetDuration : null;
         const deltaStr = delta != null ? `${delta >= 0 ? '+' : ''}${delta.toFixed(0)}` : '—';
 
@@ -115,7 +115,7 @@ function rebuildTable() {
         prevReached = reached;
         tr.innerHTML = `
             <td>${cp.name}</td>
-            <td>${toHHMM(cp.targetDuration + startTimeMinutes)}</td>     <!-- target -->
+            <td>${toHHMM(cp.targetDuration + effectiveStartTimeMinutes)}</td>     <!-- target -->
             <td class="${guessClass}">${bestGuessStr}</td>     <!-- actual, or forecast (~) if not reached yet -->
             <td class="${guessClass}">${deltaStr}</td>     <!-- delta vs target, minutes -->
             <td>—</td>     <!-- Dauer -->
@@ -142,6 +142,7 @@ const progressTrace = []; // [{ts, cumLkm}], real GPS-derived points only — no
 // if this is way off (e.g. wrong date/timezone during dev testing), it gets
 // back-calculated from the 2nd checkpoint crossing instead of trusted blindly.
 let effectiveStartTs = startTime.getTime() / 1000;
+let effectiveStartTimeMinutes = startTimeMinutes; // clock-time reference for Soll/Ist display — corrected alongside effectiveStartTs; targetDuration/actualDuration/forecastDuration themselves (the underlying plan and observations) never change, only how they're converted to a time-of-day
 let startTimeSanityChecked = false;
 const STARTTIME_SANITY_THRESHOLD_MIN = 120; // far beyond plausible pace variance over ~0.5 lkm
 
@@ -185,7 +186,9 @@ function checkStartTimeSanity(cp) {
         `Back-calculating a corrected start time.`);
 
     effectiveStartTs = cp.actualTs - cp.targetDuration * 60;
-    console.info("Effective start: "+new Date(effectiveStartTs*1000).toLocaleString());
+    const correctedStartDate = new Date(effectiveStartTs * 1000);
+    effectiveStartTimeMinutes = correctedStartDate.getHours() * 60 + correctedStartDate.getMinutes();
+    console.info("Effective start: "+correctedStartDate.toLocaleString());
     checkPoints[0].actualTs = effectiveStartTs;
     checkPoints[0].actualDuration = 0;
     cp.actualDuration = (cp.actualTs - effectiveStartTs) / 60; // ≈ cp.targetDuration, by construction
