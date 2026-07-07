@@ -52,6 +52,7 @@ import argparse
 import bisect
 import math
 import random
+import statistics
 import time
 import urllib.request
 import urllib.parse
@@ -70,6 +71,9 @@ FATIGUE_ONSET = 40.0   # lkm
 FATIGUE_LAMBDA = 0.020
 FATIGUE_FLOOR = 0.55
 MIN_GRAD_ADJ = 0.3  # numerical safety net against extreme/noisy raw-GPX grades
+GRADE_SMOOTHING_WINDOW_M = 200.0  # rolling-median elevation window before computing any grade — matches the real TerrainSegmenter's ~200m max segment length
+MIN_GRADE = -0.30   # matches the "-30%" descent cap mentioned for the real segmenter
+MAX_GRADE = 0.50    # defensive ascent-side bound; real segmenter's exact cap is unconfirmed
 
 
 def parse_gpx(path):
@@ -135,6 +139,48 @@ def interpolate_at_distance(points, cum_dist, target_dist):
     return (lat, lon, ele)
 
 
+def interpolate_scalar_at_distance(values, cum_dist, target_dist):
+    """Same interpolation as interpolate_at_distance, but for a plain list
+    of scalars (used for the smoothed elevation profile)."""
+    total = cum_dist[-1]
+    if target_dist <= 0:
+        return values[0]
+    if target_dist >= total:
+        return values[-1]
+
+    lo, hi = 0, len(cum_dist) - 1
+    while lo < hi - 1:
+        mid = (lo + hi) // 2
+        if cum_dist[mid] <= target_dist:
+            lo = mid
+        else:
+            hi = mid
+
+    seg_len = cum_dist[hi] - cum_dist[lo]
+    frac = 0.0 if seg_len == 0 else (target_dist - cum_dist[lo]) / seg_len
+    return values[lo] + (values[hi] - values[lo]) * frac
+
+
+def smooth_elevations(points, cum_dist, window_m=GRADE_SMOOTHING_WINDOW_M):
+    """Rolling-median elevation smoothing by distance window, used only for
+    grade/physics computation — real recorded GPS elevation is noisy enough
+    (easily several meters of jitter) that raw point-to-point grade produces
+    wild, sign-flipping apparent gradients feeding a nonlinear polynomial.
+    This mirrors (approximately) the rolling-median smoothing the real
+    TerrainSegmenter applies before grading, and is intentionally a
+    separate profile from the one actually sent in each ping — the sent
+    elevation should still look like realistic noisy GPS data."""
+    eles = [p[2] for p in points]
+    half = window_m / 2.0
+    smoothed = []
+    for i, d in enumerate(cum_dist):
+        lo_idx = bisect.bisect_left(cum_dist, d - half)
+        hi_idx = bisect.bisect_right(cum_dist, d + half)
+        window_eles = eles[lo_idx:hi_idx]
+        smoothed.append(statistics.median(window_eles) if window_eles else eles[i])
+    return smoothed
+
+
 def add_noise(lat, lon, noise_m):
     """Add Gaussian noise (meters, stddev) to a lat/lon point."""
     if noise_m <= 0:
@@ -172,13 +218,15 @@ def fatigue_multiplier(cum_lkm):
 
 def local_grade(ele_here, ele_next, sub_dist_m):
     """Net gradient (fraction, e.g. 0.1 = 10%) of one raw point-to-point
-    sub-segment."""
+    sub-segment, clamped to a plausible trail range as a defensive backstop
+    against residual noise even after smoothing."""
     if sub_dist_m <= 0:
         return 0.0
-    return (ele_next - ele_here) / sub_dist_m
+    grade = (ele_next - ele_here) / sub_dist_m
+    return max(MIN_GRADE, min(MAX_GRADE, grade))
 
 
-def advance_by_time(points, cum_dist, total_dist, pos_m, cum_ascent_m, base_speed, interval_s):
+def advance_by_time(points, cum_dist, smoothed_ele, total_dist, pos_m, cum_ascent_m, base_speed, interval_s):
     """Walk forward along the raw GPX points, consuming exactly interval_s
     seconds of simulated time. Each individual raw point-to-point
     sub-segment gets its own grade-and-fatigue-adjusted speed — rather than
@@ -188,6 +236,9 @@ def advance_by_time(points, cum_dist, total_dist, pos_m, cum_ascent_m, base_spee
     sidesteps the chicken-and-egg problem of sizing a step from an assumed
     speed: we accumulate time directly against the route's own existing
     point spacing, so no step distance needs to be guessed up front.
+
+    Grade (and hence cum_ascent) is computed from smoothed_ele, not the raw
+    points' own elevation — see smooth_elevations() for why.
 
     Returns (new_pos_m, new_cum_ascent_m, first_grade, first_speed) — the
     grade/speed of the first sub-segment consumed are returned purely for
@@ -207,8 +258,8 @@ def advance_by_time(points, cum_dist, total_dist, pos_m, cum_ascent_m, base_spee
             idx += 1
             continue
 
-        ele_here = interpolate_at_distance(points, cum_dist, pos)[2]
-        ele_next = points[idx][2]
+        ele_here = interpolate_scalar_at_distance(smoothed_ele, cum_dist, pos)
+        ele_next = smoothed_ele[idx]
         grade = local_grade(ele_here, ele_next, sub_dist)
         grad_adj = max(grade_adjustment(grade), MIN_GRAD_ADJ)
         cum_lkm = pos / 1000.0 + cum_ascent / 100.0
@@ -288,6 +339,7 @@ def main():
     points = parse_gpx(args.gpx_file)
     cum_dist = build_cumulative_distances(points)
     total_dist = cum_dist[-1]
+    smoothed_ele = smooth_elevations(points, cum_dist)
     print(f"Loaded {len(points)} trackpoints, total length {total_dist/1000:.2f} km")
 
     start_lat, start_lon, start_ele = points[0]
@@ -331,7 +383,7 @@ def main():
     while traveled < total_dist:
         lat, lon, ele = interpolate_at_distance(points, cum_dist, traveled)
         traveled, cum_ascent_m, grade, speed = advance_by_time(
-            points, cum_dist, total_dist, traveled, cum_ascent_m, args.speed, args.interval)
+            points, cum_dist, smoothed_ele, total_dist, traveled, cum_ascent_m, args.speed, args.interval)
         fatigue = fatigue_multiplier(traveled / 1000.0 + cum_ascent_m / 100.0)
 
         pct = 100 * traveled / total_dist
