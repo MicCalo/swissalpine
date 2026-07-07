@@ -145,9 +145,6 @@ let effectiveStartTs = startTime.getTime() / 1000;
 let startTimeSanityChecked = false;
 const STARTTIME_SANITY_THRESHOLD_MIN = 120; // far beyond plausible pace variance over ~0.5 lkm
 
-checkPoints[0].actualTs = effectiveStartTs;
-checkPoints[0].actualDuration = 0;
-
 // Windowed nearest-point search for sequential GPS pings: only look near
 // the last accepted match (100 pts back / 1000 forward) instead of the
 // whole route, so a switchback — or start/finish proximity on a loop
@@ -188,9 +185,12 @@ function checkStartTimeSanity(cp) {
         `Back-calculating a corrected start time.`);
 
     effectiveStartTs = cp.actualTs - cp.targetDuration * 60;
+    console.info("Effective start: "+new Date(effectiveStartTs*1000).toLocaleString());
     checkPoints[0].actualTs = effectiveStartTs;
     checkPoints[0].actualDuration = 0;
     cp.actualDuration = (cp.actualTs - effectiveStartTs) / 60; // ≈ cp.targetDuration, by construction
+
+    rebuildTable();
 }
 
 // --- Forecast fitting: a three-phase re-fit of forecastParams driven by
@@ -261,10 +261,7 @@ function interpolateCheckpointCrossings(prevPoint, newPoint) {
         cp.actualDuration = (cp.actualTs - effectiveStartTs) / 60; // minutes
         nextCpIdx++;
 
-        if (cp.hidden){
-            console.debug("Crossed checkpoint at lkm " + cp.cumLkm.toFixed(2) + " (hidden)");
-        }
-        else{
+        if (!cp.hidden){
             console.info("Crossed checkpoint '" + cp.name + "' at lkm " + cp.cumLkm.toFixed(2) + " (visible)");
         }
 
