@@ -1,6 +1,6 @@
 import { initMap } from '/static/map-view.js';
 import { buildPlot, getPlot, getXScale, getYScale } from '/static/chart-view.js';
-import { getGradeAjustment, predict  } from '/static/model.js';
+import { getGradeAjustment, predict, nelderMead  } from '/static/model.js';
 import { initializeSegments, initializeCheckPoints } from '/static/init-utils.js';
 import { Checkpoint } from '/static/checkpoint.js';
 import { toHHMM  } from '/static/utils.js';
@@ -209,6 +209,12 @@ const PHASE1_END_LKM = 30;
 const PHASE2_END_LKM = 60; // picked so onset=40lkm sits inside this range, not at its edge
 const OFFSET_WINDOW = 5;   // rolling window (in checkpoints) for the phase-1 offset
 
+// Bounds for the phase-3 search — keep the optimizer from wandering into
+// physically implausible territory. nelderMead() itself is unconstrained,
+// so out-of-bounds guesses are penalized via a large cost instead.
+const PHASE3_ONSET_MIN = 20, PHASE3_ONSET_MAX = 70;
+const PHASE3_LAMBDA_MIN = 0.001, PHASE3_LAMBDA_MAX = 0.05;
+
 function refitForecast() {
     const lastIdx = nextCpIdx - 1; // most recently crossed checkpoint
     if (lastIdx < 1) return;       // nothing but the start line crossed yet
@@ -241,9 +247,33 @@ function refitForecast() {
         predict(trackSegments, checkPoints, forecastParams);
 
     } else {
-        // Phase 3 (onset/lambda refit) isn't implemented yet — deliberately
-        // left as a no-op rather than silently reverting to target or
-        // extrapolating phase 2's baseSpeed indefinitely.
+        // Comfortably past onset (40lkm), so there's finally a real fatigue
+        // curve to fit. baseSpeed stays frozen at whatever phase 2 last
+        // computed — only onset/lambda are refit here, via Nelder-Mead.
+        // The cost function uses a scratch params.name ('_scratch') so it
+        // doesn't clobber forecastDuration on every trial evaluation; only
+        // the final best-fit params get written to forecastDuration.
+        const frozenBaseSpeed = forecastParams.baseSpeed;
+
+        function cost([onset, lambda]) {
+            if (onset < PHASE3_ONSET_MIN || onset > PHASE3_ONSET_MAX) return 1e12;
+            if (lambda < PHASE3_LAMBDA_MIN || lambda > PHASE3_LAMBDA_MAX) return 1e12;
+
+            predict(trackSegments, checkPoints,
+                { name: '_scratch', baseSpeed: frozenBaseSpeed, onset, lambda, floor: targetParams.floor });
+
+            let sumSq = 0;
+            for (let i = 1; i <= lastIdx; i++) {
+                const d = checkPoints[i]._scratchDuration - checkPoints[i].actualDuration;
+                sumSq += d * d;
+            }
+            return sumSq;
+        }
+
+        const [onset, lambda] = nelderMead(cost, [targetParams.onset, targetParams.lambda]);
+        Object.assign(forecastParams,
+            { name: 'forecast', baseSpeed: frozenBaseSpeed, onset, lambda, floor: targetParams.floor });
+        predict(trackSegments, checkPoints, forecastParams);
     }
 
     rebuildTable();
