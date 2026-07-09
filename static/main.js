@@ -10,6 +10,18 @@ const { points: trackPoints, segments: trackSegments, gapPolys, targetParams, fo
 
 const startTimeMinutes = startTime.getHours() * 60 + startTime.getMinutes()
 
+// On mobile, #top (and therefore #map) is display:none until data-view is
+// set — see the CSS media query. This has to happen *before* initMap() runs
+// below: Leaflet's fitBounds() computes zoom/center from the container's
+// current size, and a still-hidden #map has zero size at that moment,
+// producing the "zoomed out to the whole world" default. Setting this early
+// (rather than down in the Split()-skipping block further down, where it
+// used to live) fixes that ordering.
+const isMobileLayout = window.matchMedia('(max-width: 768px)').matches;
+if (isMobileLayout) {
+    document.body.dataset.view = 'map'; // matches the "active" button set in the template
+}
+
 // Derive cumDist, ele, gradAdj ect. on each segment
 initializeSegments(trackSegments, trackPoints, gapPolys);
 const checkPoints = initializeCheckPoints(trackSegments, trackPoints);
@@ -357,13 +369,36 @@ evtSource.addEventListener("posUpdate", (event) => {
     }
 });
 
-// Layout — resizable split panels
-Split(['#map', '#table-wrapper'], {
-    sizes: [65, 35], gutterSize: 6,
-    onDrag:    () => map.invalidateSize(),
-    onDragEnd: () => rebuildPlot(),
-});
-Split(['#top', '#profile'], {
-    direction: 'vertical', sizes: [80, 20], gutterSize: 6,
-    onDragEnd: () => { map.invalidateSize(); rebuildPlot(); },
-});
+// Layout — resizable split panels on desktop; a full-screen one-view-at-a-time
+// tab switcher on narrow screens instead (see the matching CSS media query).
+// Split.js sets explicit inline widths/heights, which would fight the CSS
+// show/hide rules, so it's skipped entirely on mobile rather than reconfigured.
+// (isMobileLayout itself is computed near the top of the file, before initMap().)
+if (!isMobileLayout) {
+    Split(['#map', '#table-wrapper'], {
+        sizes: [65, 35], gutterSize: 6,
+        onDrag:    () => map.invalidateSize(),
+        onDragEnd: () => rebuildPlot(),
+    });
+    Split(['#top', '#profile'], {
+        direction: 'vertical', sizes: [80, 20], gutterSize: 6,
+        onDragEnd: () => { map.invalidateSize(); rebuildPlot(); },
+    });
+} else {
+    // The map's Leaflet container needs invalidateSize() whenever it becomes
+    // visible after being hidden (its internal pixel-size cache goes stale).
+    // The chart is worse: Plot.plot() fixes its SVG width from div.clientWidth
+    // at *construction* time, which is 0 while display:none — so switching to
+    // the chart tab needs a full rebuildPlot(), not just a resize nudge.
+    for (const btn of document.querySelectorAll('#mobile-tabs button')) {
+        btn.addEventListener('click', () => {
+            const view = btn.dataset.view;
+            document.body.dataset.view = view;
+            for (const b of document.querySelectorAll('#mobile-tabs button')) {
+                b.classList.toggle('active', b === btn);
+            }
+            if (view === 'map') map.invalidateSize();
+            if (view === 'chart') rebuildPlot();
+        });
+    }
+}

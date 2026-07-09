@@ -2,6 +2,7 @@
 <html>
     <head>
         <title>Test</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
         <link id="favicon" rel="icon" type="image/x-icon" href="{{ url_for('static', path='/favicon.ico') }}">
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
             integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
@@ -23,6 +24,11 @@
     </head>
 
     <body>
+        <nav id="mobile-tabs">
+            <button type="button" data-view="map" class="active">Map</button>
+            <button type="button" data-view="table">Table</button>
+            <button type="button" data-view="chart">Chart</button>
+        </nav>
         <div id="top">
             <div id="map"></div>
             <div id="table-wrapper">

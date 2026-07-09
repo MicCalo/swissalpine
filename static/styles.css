@@ -83,3 +83,44 @@ td:first-child { text-align: left; }
     cursor: pointer;
     white-space: nowrap;
 }
+
+#mobile-tabs { display: none; }
+
+@media (max-width: 768px) {
+    #mobile-tabs {
+        display: flex;
+        flex-shrink: 0;
+        border-bottom: 1px solid black;
+    }
+    #mobile-tabs button {
+        flex: 1;
+        font-family: inherit;
+        font-size: 14px;
+        padding: 10px;
+        background: white;
+        color: black;
+        border: none;
+        border-right: 1px solid #ccc;
+        cursor: pointer;
+    }
+    #mobile-tabs button:last-child { border-right: none; }
+    #mobile-tabs button.active { background: #eee; font-weight: 500; }
+
+    /* Only one of map / table / chart is shown at a time, driven by
+       body[data-view]. #top wraps map+table; #profile (the chart) is a
+       sibling — both need showing/hiding as whole blocks, not just their
+       inner panels, since #top's own flex layout would otherwise still
+       reserve space for a "hidden" child. */
+    #top     { display: none; flex-direction: column; }
+    #profile { display: none; height: auto; flex: 1; }
+
+    body[data-view="map"]   #top { display: flex; }
+    body[data-view="map"]   #map { display: block; width: 100%; height: 100%; }
+    body[data-view="map"]   #table-wrapper { display: none; }
+
+    body[data-view="table"] #top { display: flex; }
+    body[data-view="table"] #map { display: none; }
+    body[data-view="table"] #table-wrapper { display: block; width: 100%; height: 100%; }
+
+    body[data-view="chart"] #profile { display: block; }
+}

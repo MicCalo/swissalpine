@@ -74,7 +74,7 @@ def read_actual_positions(start_time: datetime, track: Track) -> list:
     return result
 
 #start_time = datetime.fromisoformat("2026-07-18T05:00:00+02:00")
-start_time = datetime.fromisoformat("2026-07-06T17:29:42+02:00")
+start_time = datetime.fromisoformat("2026-07-18T05:00:00+02:00")
 last_pt_idx = 0
 
 actual_points = read_actual_positions(start_time, track)
@@ -162,5 +162,5 @@ async def position() -> AsyncIterable[ServerSentEvent]:
         yield ServerSentEvent(data=latest_position, event='posUpdate', id=str(i))
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="192.168.178.90", port=8016)
+    uvicorn.run(app, host="10.68.62.199", port=8016)
   # uvicorn.run(app, host="127.0.0.1", port=8016)
