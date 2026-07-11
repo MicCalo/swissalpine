@@ -123,4 +123,8 @@ td:first-child { text-align: left; }
     body[data-view="table"] #table-wrapper { display: block; width: 100%; height: 100%; }
 
     body[data-view="chart"] #profile { display: block; }
+
+    /* Table is dense (12 columns); desktop's padding/sizing is too roomy
+       for a phone screen, so tighten both on mobile only. */
+    th, td { font-size: 11px; padding: 3px 4px; }
 }

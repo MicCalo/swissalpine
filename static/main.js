@@ -10,16 +10,17 @@ const { points: trackPoints, segments: trackSegments, gapPolys, targetParams, fo
 
 const startTimeMinutes = startTime.getHours() * 60 + startTime.getMinutes()
 
-// On mobile, #top (and therefore #map) is display:none until data-view is
-// set — see the CSS media query. This has to happen *before* initMap() runs
-// below: Leaflet's fitBounds() computes zoom/center from the container's
-// current size, and a still-hidden #map has zero size at that moment,
-// producing the "zoomed out to the whole world" default. Setting this early
-// (rather than down in the Split()-skipping block further down, where it
-// used to live) fixes that ordering.
+// On mobile, #top's children (and #profile) are display:none until data-view
+// is set — see the CSS media query. Table is now the default/first tab, so
+// #map stays hidden at initial load. That's fine for its own visibility, but
+// Leaflet's fitBounds() (called inside initMap() below) computes zoom/center
+// from the container's *current* size — a hidden #map has zero size, so
+// fitBounds() would still compute the wrong ("whole world") view even though
+// #map isn't the visible tab. That gets corrected separately, the first time
+// the map tab is actually shown — see mapNeedsRefit further down.
 const isMobileLayout = window.matchMedia('(max-width: 768px)').matches;
 if (isMobileLayout) {
-    document.body.dataset.view = 'map'; // matches the "active" button set in the template
+    document.body.dataset.view = 'table'; // matches the "active" button set in the template
 }
 
 // Derive cumDist, ele, gradAdj ect. on each segment
@@ -35,7 +36,7 @@ predict(trackSegments, checkPoints, forecastParams);
 
 
 // Map
-const { map, highlight, actualPosition, actualRoutePoly, isAutoPanActualPositionEnabled, isAutoPanChartPositionEnabled } = initMap(trackPoints, checkPoints, actualPoints, COLOR);
+const { map, highlight, actualPosition, actualRoutePoly, routeBounds, isAutoPanActualPositionEnabled, isAutoPanChartPositionEnabled } = initMap(trackPoints, checkPoints, actualPoints, COLOR);
 
 // Chart
 let autoPan = true;
@@ -390,6 +391,18 @@ if (!isMobileLayout) {
     // The chart is worse: Plot.plot() fixes its SVG width from div.clientWidth
     // at *construction* time, which is 0 while display:none — so switching to
     // the chart tab needs a full rebuildPlot(), not just a resize nudge.
+    //
+    // The map has its own version of the chart's problem: initMap() already
+    // called map.fitBounds() once, unconditionally, while #map was hidden
+    // (table is the default tab) — so that first fit computed the wrong
+    // ("whole world") view against a zero-size container. invalidateSize()
+    // alone only fixes Leaflet's internal size bookkeeping; it doesn't redo
+    // fitBounds(). So the *first* time the map tab is shown, re-fit properly;
+    // after that, just invalidateSize() — preserving any manual pan/zoom the
+    // person did on a previous visit to the tab, rather than resetting it
+    // every time they switch back.
+    let mapNeedsRefit = document.body.dataset.view !== 'map';
+
     for (const btn of document.querySelectorAll('#mobile-tabs button')) {
         btn.addEventListener('click', () => {
             const view = btn.dataset.view;
@@ -397,7 +410,13 @@ if (!isMobileLayout) {
             for (const b of document.querySelectorAll('#mobile-tabs button')) {
                 b.classList.toggle('active', b === btn);
             }
-            if (view === 'map') map.invalidateSize();
+            if (view === 'map') {
+                map.invalidateSize();
+                if (mapNeedsRefit) {
+                    map.fitBounds(routeBounds);
+                    mapNeedsRefit = false;
+                }
+            }
             if (view === 'chart') rebuildPlot();
         });
     }

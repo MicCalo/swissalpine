@@ -84,6 +84,7 @@ export function initMap(trackPoints, checkPoints, actualPoints, color) {
 
     return {
         map, highlight, actualPosition, actualRoutePoly,
+        routeBounds: route.getBounds(),
         isAutoPanActualPositionEnabled: () => autoPanActualPositionCheckbox.checked,
         isAutoPanChartPositionEnabled: () => autoPanChartPositionCheckbox.checked
     };
