@@ -359,8 +359,20 @@ function formatElapsedSince(ts) {
 }
 
 function updatePingInfo() {
-    const text = `Last ping: ${formatElapsedSince(lastPingTs)}`;
-    for (const el of document.querySelectorAll('.ping-info')) el.textContent = text;
+    document.getElementById('ping-info-line1').textContent =
+        `Last ping: ${formatElapsedSince(lastPingTs)}`;
+
+    const line2 = document.getElementById('ping-info-line2');
+    if (doneIdx < 0) {
+        line2.textContent = '—';
+    } else {
+        const seg = trackSegments[doneIdx];
+        const total = trackSegments[trackSegments.length - 1];
+        const pct = (seg.cumLkm / total.cumLkm) * 100;
+        line2.textContent =
+            `${seg.cumDist.toFixed(1)} km · ${seg.cumLkm.toFixed(1)} lkm · ` +
+            `↑${seg.cumAscent.toFixed(0)}m · ↓${seg.cumDescent.toFixed(0)}m · ${pct.toFixed(0)}% of course`;
+    }
 }
 updatePingInfo();
 setInterval(updatePingInfo, 15000); // keep "X min ago" current even if no new pings ever arrive
