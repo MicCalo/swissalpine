@@ -130,7 +130,6 @@ function rebuildTable() {
             <td>${toHHMM(cp.targetDuration + effectiveStartTimeMinutes)}</td>     <!-- target -->
             <td class="${guessClass}">${bestGuessStr}</td>     <!-- actual, or forecast (~) if not reached yet -->
             <td class="${guessClass}">${deltaStr}</td>     <!-- delta vs target, minutes -->
-            <td>—</td>     <!-- Dauer -->
             <td>${cp.cumDist.toFixed(0)}</td>
             <td>${cp.cumAscent.toFixed(0)}</td>     <!-- up -->
             <td>${cp.cumDescent.toFixed(0)}</td>     <!-- down -->
