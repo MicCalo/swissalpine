@@ -84,6 +84,14 @@ td:first-child { text-align: left; }
     white-space: nowrap;
 }
 
+.ping-info {
+    font-family: inherit;
+    font-size: 12px;
+    color: #666;
+    padding: 4px 8px;
+    flex-shrink: 0;
+}
+
 #mobile-tabs { display: none; }
 
 @media (max-width: 768px) {

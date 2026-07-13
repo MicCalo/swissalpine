@@ -342,6 +342,29 @@ rebuildPlot();
 // Table
 rebuildTable();
 
+// Last-ping staleness display. Based on the last known ping's own ts (from
+// actualPoints, real epoch seconds), not "time since this tab started
+// listening" — so a fresh page reload correctly shows true elapsed silence
+// immediately, rather than resetting to "just now" every time the page loads.
+let lastPingTs = actualPoints.length > 0 ? actualPoints[actualPoints.length - 1].ts : null;
+
+function formatElapsedSince(ts) {
+    if (ts == null) return 'no ping yet';
+    const elapsedSec = Date.now() / 1000 - ts;
+    if (elapsedSec < 60) return 'just now';
+    const mins = Math.floor(elapsedSec / 60);
+    if (mins < 60) return `${mins} min ago`;
+    const hours = Math.floor(mins / 60);
+    return `${hours}h ${mins % 60}min ago`;
+}
+
+function updatePingInfo() {
+    const text = `Last ping: ${formatElapsedSince(lastPingTs)}`;
+    for (const el of document.querySelectorAll('.ping-info')) el.textContent = text;
+}
+updatePingInfo();
+setInterval(updatePingInfo, 15000); // keep "X min ago" current even if no new pings ever arrive
+
 const evtSource = new EventSource("/position");
 
 evtSource.addEventListener("posUpdate", (event) => {
@@ -356,6 +379,9 @@ evtSource.addEventListener("posUpdate", (event) => {
     // add to list
     actualPoints.push(data);
     actualRoutePoly.addLatLng([data.lat, data.lon]);
+
+    lastPingTs = data.ts;
+    updatePingInfo();
 
     // advance the "done" portion of the elevation profile — only rebuild
     // when it actually changes, so the plot (and any active hover/crosshair

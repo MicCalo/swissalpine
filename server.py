@@ -162,5 +162,5 @@ async def position() -> AsyncIterable[ServerSentEvent]:
         yield ServerSentEvent(data=latest_position, event='posUpdate', id=str(i))
 
 if __name__ == "__main__":
-  #  uvicorn.run(app, host="10.68.62.199", port=8016)
-   uvicorn.run(app, host="127.0.0.1", port=8016)
+    uvicorn.run(app, host="10.177.22.199", port=8016)
+  # uvicorn.run(app, host="127.0.0.1", port=8016)
