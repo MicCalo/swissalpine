@@ -1,3 +1,4 @@
+from __future__ import annotations
 import uvicorn
 from data_model.coordinate import distance, Coord
 from data_model.track import Track
@@ -167,5 +168,5 @@ async def position():
     return EventSourceResponse(event_generator())
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="192.168.178.90", port=8016)
+    uvicorn.run(app, host="localhost", port=8016)
   # uvicorn.run(app, host="127.0.0.1", port=8016)
