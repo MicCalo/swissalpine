@@ -347,6 +347,7 @@ rebuildTable();
 // listening" — so a fresh page reload correctly shows true elapsed silence
 // immediately, rather than resetting to "just now" every time the page loads.
 let lastPingTs = actualPoints.length > 0 ? actualPoints[actualPoints.length - 1].ts : null;
+let lastPingBat = actualPoints.length > 0 ? actualPoints[actualPoints.length - 1].bat : null;
 
 function formatElapsedSince(ts) {
     if (ts == null) return 'no ping yet';
@@ -359,8 +360,9 @@ function formatElapsedSince(ts) {
 }
 
 function updatePingInfo() {
+    const batStr = lastPingBat != null ? ` · 🔋${lastPingBat.toFixed(0)}%` : '';
     document.getElementById('ping-info-line1').textContent =
-        `Last ping: ${formatElapsedSince(lastPingTs)}`;
+        `Last ping: ${formatElapsedSince(lastPingTs)}${batStr}`;
 
     const line2 = document.getElementById('ping-info-line2');
     if (doneIdx < 0) {
@@ -393,6 +395,7 @@ evtSource.addEventListener("posUpdate", (event) => {
     actualRoutePoly.addLatLng([data.lat, data.lon]);
 
     lastPingTs = data.ts;
+    lastPingBat = data.bat;
     updatePingInfo();
 
     // advance the "done" portion of the elevation profile — only rebuild
