@@ -147,7 +147,7 @@ def log(request: Request, c: str):
         lon = float(tokens[1])
         ele = float(tokens[2])
         ts = int(tokens[3])
-        bat = int(tokens[4])
+        bat = float(tokens[4])
         time = datetime.fromtimestamp(ts)
         logger.info(f"lat={lat}, lon={lon}, ele={ele}, ts={ts} ({time}), bat={tokens[4]}, mz={tokens[5]} at server time {datetime.fromtimestamp(ts_now)}")
     except ValueError:
