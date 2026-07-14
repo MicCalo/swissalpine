@@ -1,4 +1,5 @@
 fastapi
+sse-starlette
 uvicorn
 slowapi
 jinja2

@@ -13,8 +13,7 @@ from fastapi.templating import Jinja2Templates
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from fastapi.sse import EventSourceResponse, ServerSentEvent
-from collections.abc import AsyncIterable, Iterable
+from sse_starlette.sse import EventSourceResponse
 import asyncio
 from pydantic import BaseModel
 
@@ -152,15 +151,21 @@ def log(request: Request, c: str):
 
 
 
-@app.get("/position", response_class=EventSourceResponse)
-async def position() -> AsyncIterable[ServerSentEvent]:
-    i = 0
-    while True:
-        await position_event.wait()   # blocks until GPS ping arrives
-        position_event.clear()        # reset for next ping
-        i += 1
-        yield ServerSentEvent(data=latest_position, event='posUpdate', id=str(i))
+@app.get("/position")
+async def position():
+    async def event_generator():
+        i = 0
+        while True:
+            await position_event.wait()   # blocks until GPS ping arrives
+            position_event.clear()        # reset for next ping
+            i += 1
+            yield {
+                "event": "posUpdate",
+                "id": str(i),
+                "data": json.dumps(latest_position),
+            }
+    return EventSourceResponse(event_generator())
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="10.177.22.199", port=8016)
+    uvicorn.run(app, host="192.168.178.90", port=8016)
   # uvicorn.run(app, host="127.0.0.1", port=8016)
