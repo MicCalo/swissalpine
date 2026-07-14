@@ -19,6 +19,7 @@ import asyncio
 from pydantic import BaseModel
 
 from uvicorn.logging import DefaultFormatter
+from contextlib import asynccontextmanager
 
 handler = logging.StreamHandler()
 handler.setFormatter(DefaultFormatter("%(levelprefix)s %(message)s"))
@@ -30,9 +31,27 @@ logger.setLevel(logging.INFO)
 
 logger.info("Start")
 
+# asyncio.Event() must not be constructed at module import time: on Python
+# 3.8/3.9 it eagerly binds to "the current event loop" at construction, and
+# at import time there isn't necessarily a running loop yet — it can end up
+# bound to a different loop than the one uvicorn actually serves requests
+# on, causing "Future attached to a different loop" errors. Creating it
+# inside the lifespan handler guarantees it binds to the real running loop.
+# main_loop is also kept so the sync /log route (run in a worker thread by
+# FastAPI, not on the event-loop thread) can signal it safely — calling
+# Event.set() directly from a different thread isn't guaranteed to work.
+main_loop: asyncio.AbstractEventLoop | None = None
+position_event: asyncio.Event | None = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global main_loop, position_event
+    main_loop = asyncio.get_running_loop()
+    position_event = asyncio.Event()
+    yield
 
 limiter = Limiter(key_func=get_remote_address)
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -42,7 +61,6 @@ templates = Jinja2Templates(directory="templates")
 track = Track("data/t808746431_k78-78.2-km.gpx")
 
 latest_position: dict | None = None
-position_event = asyncio.Event()
 
 def read_actual_positions(start_time: datetime, track: Track) -> list:
     result = []
@@ -142,7 +160,7 @@ def log(request: Request, c: str):
     latest_position = {'lat': lat, 'lon': lon,'ele':ele, 'bat': bat, 'ts':ts}
     if (dist<100):
         latest_position['pt_idx'] = pt_idx
-    position_event.set()
+    main_loop.call_soon_threadsafe(position_event.set)
     actual_points.append(latest_position)
    
     file = f"data/actual/log_{tokens[5]}_{time.date().isoformat()}.log"
