@@ -410,6 +410,12 @@ evtSource.addEventListener("posUpdate", (event) => {
     }
 });
 
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    reconnectSSE(); // or just re-fetch latest state
+  }
+});
+
 // Layout — resizable split panels on desktop; a full-screen one-view-at-a-time
 // tab switcher on narrow screens instead (see the matching CSS media query).
 // Split.js sets explicit inline widths/heights, which would fight the CSS

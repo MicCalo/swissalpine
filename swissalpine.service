@@ -1,0 +1,14 @@
+[Unit]
+Description=Swissalpine tracking backend
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/var/services/homes/michel.calonder/swissalpine/start-server.sh
+WorkingDirectory=/var/services/homes/michel.calonder/swissalpine
+Restart=always
+RestartSec=5
+User=michel.calonder
+
+[Install]
+WantedBy=multi-user.target
